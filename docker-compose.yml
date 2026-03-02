@@ -1,16 +1,17 @@
 services:
   postgres:
     image: postgres:16-alpine
+    env_file: .env
     environment:
-      POSTGRES_DB: govtracker
-      POSTGRES_USER: govtracker
-      POSTGRES_PASSWORD: govtracker
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U govtracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,6 +54,8 @@ services:
     command: celery -A app.tasks.celery_app beat -l info
     env_file: .env
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_started
     volumes:
@@ -76,7 +79,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000/api
+      API_PROXY_TARGET: http://api:8000
     depends_on:
       - api
     volumes:
