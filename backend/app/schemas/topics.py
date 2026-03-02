@@ -1,0 +1,23 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
+
+
+class TopicCreate(BaseModel):
+    label: str
+    search_queries: list[str]
+
+
+class TopicSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    label: str
+    search_queries: list[str]
+    last_refreshed_at: datetime | None
+    new_items_count: int = 0
+
+
+class TopicListResponse(BaseModel):
+    topics: list[TopicSummary]
