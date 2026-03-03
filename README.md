@@ -22,24 +22,7 @@ GOV Tracker lets you create **topic watchlists** (e.g. "AI Regulation", "Energy 
 
 ## Architecture
 
-```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│   Next.js   │────▶│   FastAPI    │────▶│  PostgreSQL  │
-│  Frontend   │     │   Backend   │     │  (3 schemas) │
-│  port 3000  │     │  port 8000  │     │              │
-└─────────────┘     └──────┬──────┘     │  bronze (raw)│
-                           │            │  silver (norm)│
-                    ┌──────┴──────┐     │  gold (graph)│
-                    │    Celery   │────▶│              │
-                    │   Workers   │     └──────────────┘
-                    │  + Beat     │
-                    └──────┬──────┘
-                           │
-                    ┌──────┴──────┐
-                    │    Redis    │
-                    │   (broker)  │
-                    └─────────────┘
-```
+<img src="docs/images/architecture.svg" alt="Project's architecture">
 
 ### Data Pipeline (Bronze → Silver → Gold)
 
@@ -252,7 +235,3 @@ gov-tracker/
 | `REDIS_URL` | `redis://redis:6379/0` | Redis connection string |
 | `SPACY_MODEL` | `en_core_web_sm` | spaCy model for NER |
 | `API_PROXY_TARGET` | `http://localhost:8000` | Backend URL for frontend proxy |
-
-## License
-
-This project is provided as-is for educational and research purposes.
