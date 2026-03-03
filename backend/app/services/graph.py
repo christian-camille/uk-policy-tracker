@@ -1,8 +1,27 @@
-from sqlalchemy import select, union_all
+from __future__ import annotations
+
+import logging
+
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.gold import GraphEdge, GraphNode
+from app.models.silver import (
+    ActivityEvent,
+    Bill,
+    ContentItem,
+    ContentItemOrganisation,
+    Division,
+    EntityMention,
+    Organisation,
+    Person,
+    Topic,
+    WrittenQuestion,
+)
 from app.schemas.entities import EdgeResponse, EntityDetailResponse, NodeResponse
+
+logger = logging.getLogger(__name__)
 
 
 class GraphService:
@@ -98,3 +117,219 @@ class GraphService:
         """)
         result = await self.db.execute(stmt, {"topic_id": topic_id, "limit": limit})
         return [dict(row._mapping) for row in result]
+
+
+class GraphProjectionBuilder:
+    """
+    Rebuilds the gold graph projection from silver tables.
+    Uses synchronous Session (for Celery worker context).
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def rebuild(self) -> dict[str, int]:
+        """
+        Full rebuild: truncate gold tables, create nodes from every silver
+        entity type, then create edges for all known relationships.
+        Returns counts of nodes and edges created.
+        """
+        # Truncate in correct order (edges reference nodes)
+        self.db.execute(text("TRUNCATE gold.graph_edges CASCADE"))
+        self.db.execute(text("TRUNCATE gold.graph_nodes CASCADE"))
+        self.db.flush()
+
+        # Build node map: (entity_type, entity_id) -> graph_node.id
+        node_map: dict[tuple[str, int], int] = {}
+
+        node_map.update(self._create_nodes_for(Topic, "topic", "id", "label"))
+        node_map.update(self._create_nodes_for(ContentItem, "content_item", "id", "title"))
+        node_map.update(self._create_nodes_for(Organisation, "organisation", "id", "title"))
+        node_map.update(
+            self._create_nodes_for(
+                Person,
+                "person",
+                "id",
+                "name_display",
+                properties_fn=lambda p: {
+                    "party": p.party,
+                    "house": p.house,
+                    "constituency": p.constituency,
+                },
+            )
+        )
+        node_map.update(
+            self._create_nodes_for(
+                Bill,
+                "bill",
+                "id",
+                "short_title",
+                properties_fn=lambda b: {
+                    "current_house": b.current_house,
+                    "current_stage": b.current_stage,
+                    "is_act": b.is_act,
+                },
+            )
+        )
+        node_map.update(self._create_nodes_for(WrittenQuestion, "question", "id", "heading"))
+        node_map.update(
+            self._create_nodes_for(
+                Division,
+                "division",
+                "id",
+                "title",
+                properties_fn=lambda d: {
+                    "aye_count": d.aye_count,
+                    "no_count": d.no_count,
+                    "house": d.house,
+                },
+            )
+        )
+        self.db.flush()
+
+        # Create edges
+        edge_count = 0
+        edge_count += self._create_published_by_edges(node_map)
+        edge_count += self._create_about_topic_edges(node_map)
+        edge_count += self._create_asked_by_edges(node_map)
+        edge_count += self._create_mentions_edges(node_map)
+
+        self.db.flush()
+
+        stats = {"nodes": len(node_map), "edges": edge_count}
+        logger.info("Graph projection rebuilt: %s", stats)
+        return stats
+
+    def _create_nodes_for(
+        self,
+        model,
+        entity_type: str,
+        id_attr: str,
+        label_attr: str,
+        properties_fn=None,
+    ) -> dict[tuple[str, int], int]:
+        """Create GraphNode rows from a silver table and return the mapping."""
+        entities = self.db.execute(select(model)).scalars().all()
+        mapping: dict[tuple[str, int], int] = {}
+
+        for entity in entities:
+            entity_id = getattr(entity, id_attr)
+            label = getattr(entity, label_attr) or f"{entity_type}#{entity_id}"
+            props = properties_fn(entity) if properties_fn else None
+
+            node = GraphNode(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                label=label,
+                properties=props,
+            )
+            self.db.add(node)
+            self.db.flush()
+            mapping[(entity_type, entity_id)] = node.id
+
+        return mapping
+
+    def _create_published_by_edges(
+        self, node_map: dict[tuple[str, int], int]
+    ) -> int:
+        """content_item -> organisation via content_item_organisations junction."""
+        links = self.db.execute(select(ContentItemOrganisation)).scalars().all()
+        count = 0
+        for link in links:
+            src = node_map.get(("content_item", link.content_item_id))
+            tgt = node_map.get(("organisation", link.organisation_id))
+            if src and tgt:
+                self.db.add(
+                    GraphEdge(
+                        source_node_id=src,
+                        target_node_id=tgt,
+                        edge_type="PUBLISHED_BY",
+                    )
+                )
+                count += 1
+        return count
+
+    def _create_about_topic_edges(
+        self, node_map: dict[tuple[str, int], int]
+    ) -> int:
+        """entity -> topic derived from activity_events."""
+        events = self.db.execute(
+            select(
+                ActivityEvent.source_entity_type,
+                ActivityEvent.source_entity_id,
+                ActivityEvent.topic_id,
+            )
+            .where(ActivityEvent.topic_id.isnot(None))
+            .distinct()
+        ).all()
+
+        count = 0
+        for source_entity_type, source_entity_id, topic_id in events:
+            src = node_map.get((source_entity_type, source_entity_id))
+            tgt = node_map.get(("topic", topic_id))
+            if src and tgt:
+                self.db.add(
+                    GraphEdge(
+                        source_node_id=src,
+                        target_node_id=tgt,
+                        edge_type="ABOUT_TOPIC",
+                    )
+                )
+                count += 1
+        return count
+
+    def _create_asked_by_edges(
+        self, node_map: dict[tuple[str, int], int]
+    ) -> int:
+        """question -> person via asking_member_id."""
+        questions = (
+            self.db.execute(
+                select(WrittenQuestion).where(
+                    WrittenQuestion.asking_member_id.isnot(None)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        count = 0
+        for q in questions:
+            src = node_map.get(("question", q.id))
+            # asking_member_id is parliament_id; find the Person's id
+            person = self.db.execute(
+                select(Person).where(Person.parliament_id == q.asking_member_id)
+            ).scalar_one_or_none()
+            if person:
+                tgt = node_map.get(("person", person.id))
+                if src and tgt:
+                    self.db.add(
+                        GraphEdge(
+                            source_node_id=src,
+                            target_node_id=tgt,
+                            edge_type="ASKED_BY",
+                        )
+                    )
+                    count += 1
+        return count
+
+    def _create_mentions_edges(
+        self, node_map: dict[tuple[str, int], int]
+    ) -> int:
+        """content_item -> person/bill/org via NLP-extracted entity_mentions."""
+        mentions = self.db.execute(select(EntityMention)).scalars().all()
+
+        count = 0
+        for m in mentions:
+            src = node_map.get(("content_item", m.content_item_id))
+            tgt = node_map.get((m.mentioned_entity_type, m.mentioned_entity_id))
+            if src and tgt:
+                self.db.add(
+                    GraphEdge(
+                        source_node_id=src,
+                        target_node_id=tgt,
+                        edge_type="MENTIONS",
+                        properties={"confidence": m.confidence},
+                    )
+                )
+                count += 1
+        return count
