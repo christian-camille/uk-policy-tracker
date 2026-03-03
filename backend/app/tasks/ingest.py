@@ -99,8 +99,22 @@ def create_activity_events(topic_id: int):
 
 @celery_app.task
 def run_entity_matching(topic_id: int):
-    """NLP entity matching for a topic. Implemented in Phase 5."""
-    return {"status": "not_implemented", "topic_id": topic_id}
+    """Run spaCy NER on content items for a topic and resolve against silver tables."""
+    from app.config import get_settings
+    from app.nlp.extractor import EntityExtractor
+    from app.services.matching import MatchingService
+
+    settings = get_settings()
+
+    with get_sync_session() as db:
+        extractor = EntityExtractor(model_name=settings.SPACY_MODEL)
+        service = MatchingService(db, extractor)
+        service.load_patterns()
+        count = service.match_content_items_for_topic(topic_id)
+        db.commit()
+
+    logger.info("Entity matching complete for topic %d: %d mentions", topic_id, count)
+    return {"topic_id": topic_id, "mentions_created": count}
 
 
 @celery_app.task
