@@ -119,5 +119,13 @@ def run_entity_matching(topic_id: int):
 
 @celery_app.task
 def rebuild_graph_projection():
-    """Rebuild gold graph projection. Implemented in Phase 6."""
-    return {"status": "not_implemented"}
+    """Truncate and rebuild gold.graph_nodes + gold.graph_edges from silver tables."""
+    from app.services.graph import GraphProjectionBuilder
+
+    with get_sync_session() as db:
+        builder = GraphProjectionBuilder(db)
+        stats = builder.rebuild()
+        db.commit()
+
+    logger.info("Graph projection rebuilt: %s", stats)
+    return stats
