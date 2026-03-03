@@ -139,6 +139,24 @@ async def trigger_refresh(topic_id: int, db: AsyncSession = Depends(get_db)):
     return {"status": "queued", "topic_id": topic_id}
 
 
+@router.get("/{topic_id}/actors")
+async def get_topic_actors(
+    topic_id: int,
+    limit: int = Query(10, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return key actors (persons) most connected to a topic."""
+    topic = await db.get(Topic, topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    from app.services.graph import GraphService
+
+    service = GraphService(db)
+    actors = await service.get_key_actors(topic_id, limit=limit)
+    return actors
+
+
 @router.delete("/{topic_id}", status_code=204)
 async def remove_topic(topic_id: int, db: AsyncSession = Depends(get_db)):
     """Remove a topic from the watchlist."""
