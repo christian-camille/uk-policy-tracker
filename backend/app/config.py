@@ -15,8 +15,18 @@ class Settings(BaseSettings):
     PARLIAMENT_DIVISIONS_API_URL: str = "https://commonsvotes-api.parliament.uk/data"
 
     SPACY_MODEL: str = "en_core_web_sm"
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000"
+
+    SUPABASE_URL: str = ""
+    SUPABASE_JWKS_URL: str = ""
+    SUPABASE_JWT_ISSUER: str = ""
+    SUPABASE_JWT_AUDIENCE: str = "authenticated"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
 @lru_cache
