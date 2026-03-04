@@ -18,6 +18,7 @@ from sqlalchemy import StaticPool, create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth import AuthenticatedUser, get_current_user
 from app.database import Base, get_db
 
 # ── SQLite ↔ PostgreSQL type adapters ────────────────────────────────
@@ -188,13 +189,48 @@ def app(async_engine):
         async with async_session_factory() as session:
             yield session
 
+    async def _override_get_current_user():
+        return AuthenticatedUser(
+            subject="test-user-1",
+            email="test-user-1@example.com",
+            claims={"sub": "test-user-1", "email": "test-user-1@example.com"},
+        )
+
     test_app.dependency_overrides[get_db] = _override_get_db
+    test_app.dependency_overrides[get_current_user] = _override_get_current_user
     return test_app
 
 
 @pytest.fixture
 async def client(app):
     """Async test client for FastAPI endpoint tests."""
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+
+@pytest.fixture
+def set_auth_user(app):
+    """Override the current authenticated user for a test."""
+
+    def _set(subject: str, email: str):
+        async def _override_get_current_user():
+            return AuthenticatedUser(
+                subject=subject,
+                email=email,
+                claims={"sub": subject, "email": email},
+            )
+
+        app.dependency_overrides[get_current_user] = _override_get_current_user
+
+    return _set
+
+
+@pytest.fixture
+async def unauthenticated_client(app):
+    """Async client with auth override removed to test 401 behavior."""
+    app.dependency_overrides.pop(get_current_user, None)
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
