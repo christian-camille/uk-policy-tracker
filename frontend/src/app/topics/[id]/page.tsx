@@ -36,11 +36,7 @@ export default function TopicDetailPage({
 
   const { data: actorsData } = useQuery({
     queryKey: ["actors", topicId],
-    queryFn: async () => {
-      const res = await fetch(`/api/topics/${topicId}/actors`);
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => api.getActors(topicId),
     enabled: !!topicId,
   });
 

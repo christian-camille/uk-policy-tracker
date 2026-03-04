@@ -23,6 +23,15 @@ export function TopicCard({ topic }: { topic: TopicSummary }) {
           </Link>
 
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                topic.is_global
+                  ? "bg-gray-100 text-gray-700"
+                  : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {topic.is_global ? "Shared" : "Private"}
+            </span>
             {topic.last_refreshed_at ? (
               <span>
                 Updated{" "}
