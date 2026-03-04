@@ -3,18 +3,25 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-export function useTopics() {
+export function useTopics(scope: "all" | "shared" | "private" = "all") {
   return useQuery({
-    queryKey: ["topics"],
-    queryFn: api.getTopics,
+    queryKey: ["topics", scope],
+    queryFn: () => api.getTopics(scope),
   });
 }
 
 export function useCreateTopic() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ label, searchQueries }: { label: string; searchQueries: string[] }) =>
-      api.createTopic(label, searchQueries),
+    mutationFn: ({
+      label,
+      searchQueries,
+      isGlobal,
+    }: {
+      label: string;
+      searchQueries: string[];
+      isGlobal: boolean;
+    }) => api.createTopic(label, searchQueries, isGlobal),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
     },

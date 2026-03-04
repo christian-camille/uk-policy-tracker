@@ -2,6 +2,9 @@ export interface TopicSummary {
   id: number;
   slug: string;
   label: string;
+  search_queries: string[];
+  is_global: boolean;
+  owner_user_id: number | null;
   last_refreshed_at: string | null;
   new_items_count: number;
 }
