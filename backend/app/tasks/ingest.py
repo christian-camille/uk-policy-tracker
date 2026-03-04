@@ -14,12 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
-def ingest_govuk_for_topic(self, topic_id: int):
+def ingest_govuk_for_topic(self, topic_id: int, allow_private: bool = False):
     """Fetch GOV.UK search results for a topic, store in bronze, transform to silver."""
     with get_sync_session() as db:
         topic = db.get(Topic, topic_id)
         if not topic:
             return {"error": f"Topic {topic_id} not found"}
+
+        if not topic.is_global and not allow_private:
+            logger.info("Skipping private topic %d for scheduled GOV.UK ingest", topic_id)
+            return {"topic_id": topic_id, "status": "skipped_private"}
 
         with httpx.Client(timeout=30) as http:
             client = GovUkClientSync(http)
@@ -42,12 +46,16 @@ def ingest_govuk_for_topic(self, topic_id: int):
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
-def ingest_parliament_for_topic(self, topic_id: int):
+def ingest_parliament_for_topic(self, topic_id: int, allow_private: bool = False):
     """Fetch Parliament bills, questions, divisions for a topic."""
     with get_sync_session() as db:
         topic = db.get(Topic, topic_id)
         if not topic:
             return {"error": f"Topic {topic_id} not found"}
+
+        if not topic.is_global and not allow_private:
+            logger.info("Skipping private topic %d for scheduled Parliament ingest", topic_id)
+            return {"topic_id": topic_id, "status": "skipped_private"}
 
         with httpx.Client(timeout=30) as http:
             client = ParliamentClientSync(http)
