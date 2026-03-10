@@ -1,8 +1,14 @@
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.models import Base
 
@@ -13,7 +19,12 @@ database_url = os.environ.get("DATABASE_URL_SYNC")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
-if config.config_file_name is not None:
+if (
+    config.config_file_name is not None
+    and config.get_section("loggers")
+    and config.get_section("handlers")
+    and config.get_section("formatters")
+):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
