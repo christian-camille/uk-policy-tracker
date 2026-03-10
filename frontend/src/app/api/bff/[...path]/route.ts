@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const FORWARDED_HEADERS = ["accept", "content-type", "if-none-match"];
 

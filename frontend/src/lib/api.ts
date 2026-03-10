@@ -1,4 +1,4 @@
-import { TopicSummary, TimelineResponse, EntityDetail } from "./types";
+import { TopicSummary, TimelineResponse, EntityDetail, Actor } from "./types";
 
 const BFF_URL = "/api/bff";
 const AUTH_URL = "/api/auth";
@@ -59,7 +59,8 @@ export const api = {
 
   getEntity: (nodeId: number) => fetchApi<EntityDetail>(`${BFF_URL}/entities/${nodeId}`),
 
-  getActors: (topicId: number) => fetchApi(`${BFF_URL}/topics/${topicId}/actors`),
+  getActors: (topicId: number) =>
+    fetchApi<Actor[]>(`${BFF_URL}/topics/${topicId}/actors`),
 
   refreshTopic: (topicId: number) =>
     fetchApi<{ status: string }>(`${BFF_URL}/topics/${topicId}/refresh`, {

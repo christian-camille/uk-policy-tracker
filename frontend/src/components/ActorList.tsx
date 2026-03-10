@@ -2,15 +2,7 @@
 
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { GraphNode } from "@/lib/types";
-
-interface Actor {
-  id: number;
-  label: string;
-  entity_id: number;
-  properties: Record<string, unknown> | null;
-  connection_count: number;
-}
+import { Actor } from "@/lib/types";
 
 export function ActorList({ actors }: { actors: Actor[] }) {
   if (actors.length === 0) {

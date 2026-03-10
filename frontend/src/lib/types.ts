@@ -40,6 +40,20 @@ export interface GraphNode {
   properties: Record<string, unknown> | null;
 }
 
+export interface ActorProperties {
+  party?: string | null;
+  constituency?: string | null;
+  [key: string]: unknown;
+}
+
+export interface Actor {
+  id: number;
+  label: string;
+  entity_id: number;
+  properties: ActorProperties | null;
+  connection_count: number;
+}
+
 export interface GraphEdge {
   edge_type: string;
   direction: "outgoing" | "incoming";
