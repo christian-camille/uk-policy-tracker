@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 import jwt
@@ -6,6 +7,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 
 from app.config import Settings, get_settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class AuthenticatedUser:
@@ -28,6 +32,18 @@ def _get_jwk_client(jwks_url: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(jwks_url)
 
 
+def _get_signing_algorithm(signing_key: object, token: str) -> str:
+    algorithm_name = getattr(signing_key, "algorithm_name", None)
+    if algorithm_name:
+        return algorithm_name
+
+    algorithm_name = jwt.get_unverified_header(token).get("alg")
+    if not algorithm_name:
+        raise InvalidTokenError("Token header is missing an algorithm")
+
+    return algorithm_name
+
+
 def _decode_supabase_access_token(token: str, settings: Settings) -> dict:
     if not settings.SUPABASE_JWKS_URL or not settings.SUPABASE_JWT_ISSUER:
         raise HTTPException(
@@ -37,14 +53,16 @@ def _decode_supabase_access_token(token: str, settings: Settings) -> dict:
 
     try:
         signing_key = _get_jwk_client(settings.SUPABASE_JWKS_URL).get_signing_key_from_jwt(token)
+        algorithm_name = _get_signing_algorithm(signing_key, token)
         return jwt.decode(
             token,
             signing_key.key,
-            algorithms=["RS256"],
+            algorithms=[algorithm_name],
             audience=settings.SUPABASE_JWT_AUDIENCE,
             issuer=settings.SUPABASE_JWT_ISSUER,
         )
-    except InvalidTokenError:
+    except InvalidTokenError as exc:
+        logger.warning("Supabase token validation failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
