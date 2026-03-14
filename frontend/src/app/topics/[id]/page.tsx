@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { Timeline } from "@/components/Timeline";
@@ -13,10 +12,9 @@ import { api } from "@/lib/api";
 export default function TopicDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
-  const topicId = parseInt(id, 10);
+  const topicId = parseInt(params.id, 10);
   const refreshMutation = useRefreshTopic();
 
   const { data: topicData } = useQuery({

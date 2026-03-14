@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ConnectionList } from "@/components/ConnectionList";
@@ -9,10 +8,9 @@ import { useEntity } from "@/hooks/useEntity";
 export default function EntityDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
-  const nodeId = parseInt(id, 10);
+  const nodeId = parseInt(params.id, 10);
   const { data, isLoading, error } = useEntity(nodeId);
 
   return (
