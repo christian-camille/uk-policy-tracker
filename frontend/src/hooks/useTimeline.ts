@@ -1,15 +1,42 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { TimelineQueryParams } from "@/lib/types";
 
 export function useTimeline(
   topicId: number,
-  params?: { since?: string; limit?: number; offset?: number }
+  params?: TimelineQueryParams
 ) {
-  return useQuery({
-    queryKey: ["timeline", topicId, params?.since ?? null, params?.limit ?? null, params?.offset ?? null],
-    queryFn: () => api.getTimeline(topicId, params),
+  const pageSize = params?.limit ?? 50;
+  const eventTypesKey = params?.eventTypes ? [...params.eventTypes].sort().join(",") : null;
+  const sourceTypesKey = params?.sourceEntityTypes ? [...params.sourceEntityTypes].sort().join(",") : null;
+
+  return useInfiniteQuery({
+    queryKey: [
+      "timeline",
+      topicId,
+      params?.since ?? null,
+      params?.until ?? null,
+      eventTypesKey,
+      sourceTypesKey,
+      params?.q ?? null,
+      pageSize,
+    ],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      api.getTimeline(topicId, {
+        ...params,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.has_more) {
+        return undefined;
+      }
+
+      return allPages.reduce((count, page) => count + page.events.length, 0);
+    },
     enabled: Number.isFinite(topicId),
   });
 }

@@ -8,14 +8,28 @@ export interface TopicSummary {
   new_items_count: number;
 }
 
+export type TimelineEventType =
+  | "govuk_publication"
+  | "bill_stage"
+  | "question_tabled"
+  | "question_answered"
+  | "division_held";
+
+export type TimelineSourceType = "content_item" | "bill" | "question" | "division";
+
+export interface TimelineQueryParams {
+  since?: string;
+  until?: string;
+  eventTypes?: TimelineEventType[];
+  sourceEntityTypes?: TimelineSourceType[];
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface TimelineEvent {
   id: number;
-  event_type:
-    | "govuk_publication"
-    | "bill_stage"
-    | "question_tabled"
-    | "question_answered"
-    | "division_held";
+  event_type: TimelineEventType;
   event_date: string;
   title: string;
   summary: string | null;

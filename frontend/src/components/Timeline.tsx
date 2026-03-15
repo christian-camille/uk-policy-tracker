@@ -1,43 +1,22 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
-import { CheckCircle, FileText, Gavel, HelpCircle, Vote } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { TimelineEvent } from "@/lib/types";
+import { TIMELINE_EVENT_CONFIG } from "@/lib/timeline";
 
-const EVENT_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
-  govuk_publication: {
-    color: "bg-blue-100 text-blue-800",
-    icon: FileText,
-    label: "GOV.UK Publication",
-  },
-  bill_stage: {
-    color: "bg-purple-100 text-purple-800",
-    icon: Gavel,
-    label: "Bill Stage",
-  },
-  question_tabled: {
-    color: "bg-amber-100 text-amber-800",
-    icon: HelpCircle,
-    label: "Question Tabled",
-  },
-  question_answered: {
-    color: "bg-green-100 text-green-800",
-    icon: CheckCircle,
-    label: "Question Answered",
-  },
-  division_held: {
-    color: "bg-red-100 text-red-800",
-    icon: Vote,
-    label: "Division",
-  },
-};
-
-export function Timeline({ events }: { events: TimelineEvent[] }) {
+export function Timeline({
+  events,
+  emptyMessage,
+}: {
+  events: TimelineEvent[];
+  emptyMessage?: string;
+}) {
   if (events.length === 0) {
     return (
       <div className="py-12 text-center text-slate-500">
-        No activity events yet. Try refreshing the topic data.
+        {emptyMessage ?? "No activity events yet. Try refreshing the topic data."}
       </div>
     );
   }
@@ -45,7 +24,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
   return (
     <div className="space-y-3">
       {events.map((event) => {
-        const config = EVENT_CONFIG[event.event_type] ?? {
+        const config = TIMELINE_EVENT_CONFIG[event.event_type] ?? {
           color: "bg-slate-100 text-slate-800",
           icon: FileText,
           label: event.event_type,
@@ -65,7 +44,9 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.color}`}>
                   {config.label}
                 </span>
-                <time className="text-xs text-slate-400">
+                <time className="text-xs text-slate-400" title={format(new Date(event.event_date), "PPpp")}>
+                  {format(new Date(event.event_date), "d MMM yyyy")}
+                  <span className="mx-1">·</span>
                   {formatDistanceToNow(new Date(event.event_date), {
                     addSuffix: true,
                   })}

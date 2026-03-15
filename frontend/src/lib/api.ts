@@ -2,6 +2,7 @@ import {
   Actor,
   EntityDetail,
   RefreshTopicResponse,
+  TimelineQueryParams,
   TimelineResponse,
   TopicSummary,
 } from "./types";
@@ -49,10 +50,14 @@ export const api = {
 
   getTimeline: (
     topicId: number,
-    params?: { since?: string; limit?: number; offset?: number }
+    params?: TimelineQueryParams
   ) => {
     const qs = new URLSearchParams();
     if (params?.since) qs.set("since", params.since);
+    if (params?.until) qs.set("until", params.until);
+    params?.eventTypes?.forEach((value) => qs.append("event_type", value));
+    params?.sourceEntityTypes?.forEach((value) => qs.append("source_entity_type", value));
+    if (params?.q?.trim()) qs.set("q", params.q.trim());
     if (params?.limit) qs.set("limit", String(params.limit));
     if (params?.offset) qs.set("offset", String(params.offset));
     const query = qs.toString();

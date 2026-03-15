@@ -1,8 +1,9 @@
 import re
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -12,6 +13,21 @@ from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
 from app.services.refresh import run_topic_refresh
 
 router = APIRouter(prefix="/topics", tags=["topics"])
+
+
+def _parse_iso_datetime(value: str, *, field_name: str, end_of_day: bool = False) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid '{field_name}' datetime format",
+        ) from exc
+
+    if end_of_day and "T" not in value:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    return parsed
 
 
 def _slugify(text: str) -> str:
@@ -110,6 +126,10 @@ async def get_topic(
 async def get_topic_timeline(
     topic_id: int,
     since: str | None = Query(None, description="ISO datetime to filter events after"),
+    until: str | None = Query(None, description="ISO datetime to filter events before"),
+    event_type: list[str] | None = Query(None, description="Filter by event type"),
+    source_entity_type: list[str] | None = Query(None, description="Filter by source entity type"),
+    q: str | None = Query(None, min_length=1, description="Case-insensitive text search"),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -117,22 +137,41 @@ async def get_topic_timeline(
     """Return ActivityEvents for a topic, ordered by event_date desc."""
     await _get_topic_or_404(db, topic_id)
 
-    base_filter = ActivityEvent.topic_id == topic_id
+    filters = [ActivityEvent.topic_id == topic_id]
+
     if since:
-        from datetime import datetime
+        since_dt = _parse_iso_datetime(since, field_name="since")
+        filters.append(ActivityEvent.event_date >= since_dt)
 
-        try:
-            since_dt = datetime.fromisoformat(since)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
-        base_filter = base_filter & (ActivityEvent.event_date >= since_dt)
+    if until:
+        until_dt = _parse_iso_datetime(until, field_name="until", end_of_day=True)
+        filters.append(ActivityEvent.event_date <= until_dt)
 
-    count_stmt = select(func.count(ActivityEvent.id)).where(base_filter)
+        if since and since_dt > until_dt:
+            raise HTTPException(status_code=400, detail="'since' must be earlier than or equal to 'until'")
+
+    if event_type:
+        filters.append(ActivityEvent.event_type.in_(event_type))
+
+    if source_entity_type:
+        filters.append(ActivityEvent.source_entity_type.in_(source_entity_type))
+
+    search_query = q.strip() if q else None
+    if search_query:
+        search_pattern = f"%{search_query}%"
+        filters.append(
+            or_(
+                ActivityEvent.title.ilike(search_pattern),
+                func.coalesce(ActivityEvent.summary, "").ilike(search_pattern),
+            )
+        )
+
+    count_stmt = select(func.count(ActivityEvent.id)).where(*filters)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     events_stmt = (
         select(ActivityEvent)
-        .where(base_filter)
+        .where(*filters)
         .order_by(ActivityEvent.event_date.desc())
         .limit(limit)
         .offset(offset)
