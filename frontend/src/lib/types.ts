@@ -42,6 +42,8 @@ export interface TimelineEvent {
   question_date_tabled?: string | null;
   question_date_answered?: string | null;
   asking_member_name?: string | null;
+  question_answer_text?: string | null;
+  question_answer_source_url?: string | null;
 }
 
 export interface TimelineResponse {

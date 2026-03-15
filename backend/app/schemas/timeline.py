@@ -20,6 +20,8 @@ class TimelineEvent(BaseModel):
     question_date_tabled: date | None = None
     question_date_answered: date | None = None
     asking_member_name: str | None = None
+    question_answer_text: str | None = None
+    question_answer_source_url: str | None = None
 
 
 class TimelineResponse(BaseModel):

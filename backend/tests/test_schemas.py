@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from app.routers.topics import _slugify
 from app.schemas.entities import EdgeResponse, EntityDetailResponse, NodeResponse
@@ -75,9 +75,27 @@ class TestTimelineSchemas:
             question_text="What is the government doing?",
             question_house="Commons",
             asking_member_name="Alex Sobel",
+            question_answer_text="The government has published its answer.",
+            question_answer_source_url="https://www.gov.uk/example-answer",
         )
         assert te.event_type == "govuk_publication"
         assert te.question_uin == "12345"
+        assert te.question_answer_source_url == "https://www.gov.uk/example-answer"
+
+    def test_timeline_event_accepts_question_dates(self):
+        te = TimelineEvent(
+            id=2,
+            event_type="question_answered",
+            event_date=datetime(2024, 1, 15),
+            title="Written Question",
+            summary=None,
+            source_url=None,
+            source_entity_type="question",
+            source_entity_id=11,
+            question_date_tabled=date(2024, 1, 10),
+            question_date_answered=date(2024, 1, 15),
+        )
+        assert te.question_date_answered == date(2024, 1, 15)
 
     def test_timeline_response(self):
         tr = TimelineResponse(topic_id=1, events=[], total=0, has_more=False)

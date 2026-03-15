@@ -276,6 +276,24 @@ class TestUpsertQuestion:
         assert q.house == "Commons"  # 1 -> Commons
         assert q.uin == "12345"
 
+    def test_stores_full_answer_text_and_source_link(self, db_session: Session):
+        service = IngestService(db_session)
+        raw = {
+            "id": 504,
+            "uin": "12348",
+            "heading": "Answer-rich question",
+            "questionText": "What is the government doing?",
+            "house": 1,
+            "dateAnswered": "2026-03-13T00:00:00Z",
+            "answerText": "<p>The government has published its response.</p><p>See <a href=\"https://www.gov.uk/example-answer\">the source note</a>.</p>",
+        }
+
+        q = service.upsert_question(raw, source_query="test")
+        db_session.flush()
+
+        assert q.answer_text == "The government has published its response.\n\nSee the source note."
+        assert q.answer_source_url == "https://www.gov.uk/example-answer"
+
     def test_house_lords(self, db_session: Session):
         service = IngestService(db_session)
         raw = {

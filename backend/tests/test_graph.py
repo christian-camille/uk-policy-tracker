@@ -142,6 +142,8 @@ class TestGraphProjectionBuilder:
                 date_answered=date(2026, 3, 12),
                 asking_member_id=asker.parliament_id,
                 answering_body="Foreign, Commonwealth and Development Office",
+                answer_text="The Government continues to monitor the situation closely.",
+                answer_source_url="https://www.gov.uk/example-answer",
             )
         )
         db_session.flush()
@@ -157,6 +159,8 @@ class TestGraphProjectionBuilder:
         assert question_node.properties["asked_by"] == "Iqbal Mohamed"
         assert question_node.properties["status"] == "answered"
         assert question_node.properties["question_text"].startswith("What assessment")
+        assert question_node.properties["answer_text"].startswith("The Government continues")
+        assert question_node.properties["answer_source_url"] == "https://www.gov.uk/example-answer"
 
     def test_rebuild_creates_published_by_edges(self, db_session: Session):
         ci = make_content_item(db_session)

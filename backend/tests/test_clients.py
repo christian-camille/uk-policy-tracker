@@ -251,6 +251,29 @@ class TestParliamentClient:
         assert len(result["results"]) == 1
 
     @respx.mock
+    async def test_get_question(self):
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions/50"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "value": {
+                        "id": 50,
+                        "heading": "Energy costs",
+                        "answerText": "<p>Answer text</p>",
+                    }
+                },
+            )
+        )
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            result = await client.get_question(50)
+
+        assert result["id"] == 50
+        assert result["answerText"] == "<p>Answer text</p>"
+
+    @respx.mock
     async def test_search_divisions(self):
         respx.get(
             "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
@@ -410,6 +433,60 @@ class TestParliamentClient:
         assert results["members"][0]["nameDisplayAs"] == "John Smith"
         assert member_route.called
 
+    @respx.mock
+    async def test_discover_enriches_answered_questions_with_detail(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(200, json={"items": []})
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "value": {
+                                "id": 20,
+                                "heading": "Q1",
+                                "dateAnswered": "2026-03-13T00:00:00",
+                                "answerText": "truncated...",
+                            }
+                        }
+                    ]
+                },
+            )
+        )
+        detail_route = respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions/20"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "value": {
+                        "id": 20,
+                        "heading": "Q1",
+                        "dateAnswered": "2026-03-13T00:00:00",
+                        "answerText": "<p>Full answer text</p>",
+                    }
+                },
+            )
+        )
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(return_value=httpx.Response(200, json=[]))
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert detail_route.called
+        assert results["questions"][0]["answerText"] == "<p>Full answer text</p>"
+
 
 # ── Parliament Client (sync) ─────────────────────────────────────────
 
@@ -443,6 +520,22 @@ class TestParliamentClientSync:
 
         assert result["id"] == 999
         assert result["nameDisplayAs"] == "John Smith"
+
+    @respx.mock
+    def test_get_question(self):
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions/50"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={"value": {"id": 50, "answerText": "<p>Answer text</p>"}},
+            )
+        )
+        with httpx.Client() as http:
+            client = ParliamentClientSync(http)
+            result = client.get_question(50)
+
+        assert result["answerText"] == "<p>Answer text</p>"
 
     @respx.mock
     def test_discover_continues_after_transport_error(self):
@@ -508,3 +601,56 @@ class TestParliamentClientSync:
         assert len(results["questions"]) == 1
         assert len(results["members"]) == 1
         assert results["members"][0]["nameDisplayAs"] == "John Smith"
+
+    @respx.mock
+    def test_discover_enriches_answered_questions_with_detail(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(200, json={"items": []})
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "value": {
+                                "id": 20,
+                                "heading": "Q1",
+                                "dateAnswered": "2026-03-13T00:00:00",
+                                "answerText": "truncated...",
+                            }
+                        }
+                    ]
+                },
+            )
+        )
+        detail_route = respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions/20"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "value": {
+                        "id": 20,
+                        "answerText": "<p>Full answer text</p>",
+                        "dateAnswered": "2026-03-13T00:00:00",
+                    }
+                },
+            )
+        )
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(return_value=httpx.Response(200, json=[]))
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        with httpx.Client() as http:
+            client = ParliamentClientSync(http)
+            results = client.discover_for_topic(topic)
+
+        assert detail_route.called
+        assert results["questions"][0]["answerText"] == "<p>Full answer text</p>"

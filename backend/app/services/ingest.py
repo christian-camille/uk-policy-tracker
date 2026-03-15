@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import logging
+import re
 from datetime import datetime
 
 from sqlalchemy import delete, select
@@ -24,6 +26,29 @@ from app.models.silver import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_html_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+    normalized = re.sub(r"</p\s*>", "\n\n", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"<[^>]+>", "", normalized)
+    normalized = html.unescape(normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    normalized = re.sub(r"[ \t]+", " ", normalized)
+    normalized = re.sub(r" *\n *", "\n", normalized)
+    normalized = normalized.strip()
+    return normalized or None
+
+
+def _extract_first_url(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = re.search(r"https?://[^\s<>\"']+", value)
+    if not match:
+        return None
+    return match.group(0).rstrip(".,);")
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -313,14 +338,22 @@ class IngestService:
             date_answered=_parse_date(raw_json.get("dateAnswered")),
             asking_member_id=asking_member_id,
             answering_body=raw_json.get("answeringBodyName"),
+            answer_text=_normalize_html_text(raw_json.get("answerText")),
+            answer_source_url=_extract_first_url(raw_json.get("answerText")),
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["parliament_question_id"],
             set_={
+                "uin": stmt.excluded.uin,
                 "heading": stmt.excluded.heading,
                 "question_text": stmt.excluded.question_text,
+                "house": stmt.excluded.house,
+                "date_tabled": stmt.excluded.date_tabled,
                 "date_answered": stmt.excluded.date_answered,
+                "asking_member_id": stmt.excluded.asking_member_id,
                 "answering_body": stmt.excluded.answering_body,
+                "answer_text": stmt.excluded.answer_text,
+                "answer_source_url": stmt.excluded.answer_source_url,
             },
         )
         self.db.execute(stmt)

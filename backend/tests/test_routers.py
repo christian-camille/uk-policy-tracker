@@ -305,6 +305,8 @@ async def test_timeline_includes_written_question_details(client, async_session)
         date_answered=datetime(2026, 3, 12).date(),
         asking_member_id=77,
         answering_body="Foreign, Commonwealth and Development Office",
+        answer_text="The Government continues to monitor the situation closely.",
+        answer_source_url="https://www.gov.uk/example-answer",
     )
     async_session.add(question)
     await async_session.flush()
@@ -335,6 +337,8 @@ async def test_timeline_includes_written_question_details(client, async_session)
     assert event["question_text"].startswith("What assessment has the Government made")
     assert event["question_date_tabled"] == "2026-03-10"
     assert event["question_date_answered"] == "2026-03-12"
+    assert event["question_answer_text"].startswith("The Government continues")
+    assert event["question_answer_source_url"] == "https://www.gov.uk/example-answer"
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,10 @@ DIVISIONS_API = "https://commonsvotes-api.parliament.uk/data"
 
 
 def _unwrap_member_payload(payload: dict) -> dict:
+    return payload.get("value", payload)
+
+
+def _unwrap_question_payload(payload: dict) -> dict:
     return payload.get("value", payload)
 
 
@@ -50,6 +55,13 @@ class ParliamentClient:
         resp = await self.http.get(f"{MEMBERS_API}/Members/{member_id}")
         resp.raise_for_status()
         return _unwrap_member_payload(resp.json())
+
+    async def get_question(self, question_id: int) -> dict:
+        resp = await self.http.get(
+            f"{QUESTIONS_API}/writtenquestions/questions/{question_id}"
+        )
+        resp.raise_for_status()
+        return _unwrap_question_payload(resp.json())
 
     async def search_bills(
         self, search_term: str, skip: int = 0, take: int = 20
@@ -141,12 +153,16 @@ class ParliamentClient:
             logger.warning("Parliament questions search failed for %r: %s", query, exc)
             return
 
+        new_questions: list[dict] = []
         for item in data.get("results", []):
             record = item.get("value", item)
             qid = record.get("id")
             if qid and qid not in seen["questions"]:
                 seen["questions"].add(qid)
                 results["questions"].append(record)
+                new_questions.append(record)
+
+        await self._enrich_questions_with_details(new_questions)
 
     async def _discover_divisions(
         self, query: str, results: dict[str, list], seen: dict[str, set]
@@ -183,6 +199,29 @@ class ParliamentClient:
                 seen["members"].add(normalized_member_id)
                 results["members"].append(normalized_member)
 
+    async def _enrich_questions_with_details(self, questions: list[dict]) -> None:
+        detail_candidates = [
+            question
+            for question in questions
+            if question.get("id") and question.get("dateAnswered")
+        ]
+        if not detail_candidates:
+            return
+
+        results = await asyncio.gather(
+            *[self.get_question(question["id"]) for question in detail_candidates],
+            return_exceptions=True,
+        )
+        for question, detail in zip(detail_candidates, results, strict=False):
+            if isinstance(detail, Exception):
+                logger.warning(
+                    "Parliament question detail lookup failed for %r: %s",
+                    question.get("id"),
+                    detail,
+                )
+                continue
+            question.update(detail)
+
 
 class ParliamentClientSync:
     """Synchronous variant for local refresh execution."""
@@ -204,6 +243,13 @@ class ParliamentClientSync:
         resp = self.http.get(f"{MEMBERS_API}/Members/{member_id}")
         resp.raise_for_status()
         return _unwrap_member_payload(resp.json())
+
+    def get_question(self, question_id: int) -> dict:
+        resp = self.http.get(
+            f"{QUESTIONS_API}/writtenquestions/questions/{question_id}"
+        )
+        resp.raise_for_status()
+        return _unwrap_question_payload(resp.json())
 
     def search_bills(
         self, search_term: str, skip: int = 0, take: int = 20
@@ -290,12 +336,16 @@ class ParliamentClientSync:
             logger.warning("Parliament questions search failed for %r: %s", query, exc)
             return
 
+        new_questions: list[dict] = []
         for item in data.get("results", []):
             record = item.get("value", item)
             qid = record.get("id")
             if qid and qid not in seen["questions"]:
                 seen["questions"].add(qid)
                 results["questions"].append(record)
+                new_questions.append(record)
+
+        self._enrich_questions_with_details(new_questions)
 
     def _discover_divisions(
         self, query: str, results: dict[str, list], seen: dict[str, set]
@@ -330,3 +380,19 @@ class ParliamentClientSync:
             if normalized_member_id and normalized_member_id not in seen["members"]:
                 seen["members"].add(normalized_member_id)
                 results["members"].append(normalized_member)
+
+    def _enrich_questions_with_details(self, questions: list[dict]) -> None:
+        for question in questions:
+            question_id = question.get("id")
+            if not question_id or not question.get("dateAnswered"):
+                continue
+            try:
+                detail = self.get_question(question_id)
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Parliament question detail lookup failed for %r: %s",
+                    question_id,
+                    exc,
+                )
+                continue
+            question.update(detail)

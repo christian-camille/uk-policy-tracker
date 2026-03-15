@@ -34,6 +34,8 @@ async def _load_question_details(
             WrittenQuestion.house,
             WrittenQuestion.date_tabled,
             WrittenQuestion.date_answered,
+            WrittenQuestion.answer_text,
+            WrittenQuestion.answer_source_url,
             Person.name_display.label("asking_member_name"),
         )
         .outerjoin(Person, Person.parliament_id == WrittenQuestion.asking_member_id)
@@ -48,6 +50,8 @@ async def _load_question_details(
             "question_date_tabled": row.date_tabled,
             "question_date_answered": row.date_answered,
             "asking_member_name": row.asking_member_name,
+            "question_answer_text": row.answer_text,
+            "question_answer_source_url": row.answer_source_url,
         }
         for row in result
     }

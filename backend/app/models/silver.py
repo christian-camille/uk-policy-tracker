@@ -96,6 +96,8 @@ class WrittenQuestion(Base):
         ForeignKey("silver.persons.parliament_id"), default=None
     )
     answering_body: Mapped[str | None] = mapped_column(String(256))
+    answer_text: Mapped[str | None] = mapped_column(Text)
+    answer_source_url: Mapped[str | None] = mapped_column(String(512))
 
 
 class Division(Base):

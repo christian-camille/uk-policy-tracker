@@ -36,6 +36,7 @@ export function Timeline({
           event.question_house,
           event.question_uin ? `UIN ${event.question_uin}` : null,
         ].filter(Boolean);
+        const answerPreview = event.question_answer_text?.trim();
 
         return (
           <div
@@ -88,6 +89,27 @@ export function Timeline({
 
               {event.summary && (
                 <p className="mt-1 line-clamp-2 text-sm text-slate-500">{event.summary}</p>
+              )}
+
+              {isQuestionEvent && answerPreview && (
+                <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    Answer
+                  </p>
+                  <p className="mt-1 line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-emerald-950">
+                    {answerPreview}
+                  </p>
+                  {event.question_answer_source_url && (
+                    <a
+                      href={event.question_answer_source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+                    >
+                      Open referenced source
+                    </a>
+                  )}
+                </div>
               )}
 
               {isQuestionEvent && (event.question_date_tabled || event.question_date_answered) && (

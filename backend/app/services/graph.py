@@ -270,6 +270,8 @@ class GraphProjectionBuilder:
             "question_text": question.question_text,
             "asked_by": asking_member_name,
             "answering_body": question.answering_body,
+            "answer_text": question.answer_text,
+            "answer_source_url": question.answer_source_url,
             "status": "answered" if question.date_answered else "tabled",
             "date_tabled": question.date_tabled.isoformat() if question.date_tabled else None,
             "date_answered": question.date_answered.isoformat() if question.date_answered else None,
