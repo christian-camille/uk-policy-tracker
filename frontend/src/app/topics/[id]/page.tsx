@@ -21,7 +21,8 @@ import {
   TimelineSourceType,
 } from "@/lib/types";
 
-const TIMELINE_PAGE_SIZE = 50;
+const DEFAULT_TIMELINE_PAGE_SIZE = 25;
+const ALLOWED_TIMELINE_PAGE_SIZES = [25, 50, 100] as const;
 
 function formatQueryCount(value: number | undefined, label: string) {
   if (!value) {
@@ -53,6 +54,19 @@ function normalizePageValue(value: string | null): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
     return 1;
+  }
+
+  return parsed;
+}
+
+function normalizePageSizeValue(value: string | null): number {
+  if (!value) {
+    return DEFAULT_TIMELINE_PAGE_SIZE;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!ALLOWED_TIMELINE_PAGE_SIZES.includes(parsed as (typeof ALLOWED_TIMELINE_PAGE_SIZES)[number])) {
+    return DEFAULT_TIMELINE_PAGE_SIZE;
   }
 
   return parsed;
@@ -130,6 +144,7 @@ export default function TopicDetailPage({
   const until = normalizeDateValue(searchParams.get("until"));
   const query = searchParams.get("q") ?? "";
   const currentPage = normalizePageValue(searchParams.get("page"));
+  const pageSize = normalizePageSizeValue(searchParams.get("pageSize"));
   const selectedEventTypes = getMultiValue(searchParams, "event_type", TIMELINE_EVENT_TYPE_VALUES);
   const selectedSourceTypes = getMultiValue(
     searchParams,
@@ -150,8 +165,8 @@ export default function TopicDetailPage({
     selectedSourceTypes.length > 0;
 
   const timelineParams: TimelineQueryParams = {
-    limit: TIMELINE_PAGE_SIZE,
-    offset: (currentPage - 1) * TIMELINE_PAGE_SIZE,
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
   };
 
   if (since) {
@@ -216,6 +231,13 @@ export default function TopicDetailPage({
       } else {
         nextParams.set("page", String(normalizedPage));
       }
+    }, { scrollToTop: true });
+  }
+
+  function setPageSize(nextPageSize: number) {
+    replaceSearchParams((nextParams) => {
+      nextParams.set("pageSize", String(nextPageSize));
+      nextParams.delete("page");
     }, { scrollToTop: true });
   }
 
@@ -330,7 +352,7 @@ export default function TopicDetailPage({
   } = useTimeline(topicId, timelineParams);
   const timelineEvents = timeline?.events ?? [];
   const timelineTotal = timeline?.total ?? 0;
-  const totalPages = timelineTotal > 0 ? Math.ceil(timelineTotal / TIMELINE_PAGE_SIZE) : 0;
+  const totalPages = timelineTotal > 0 ? Math.ceil(timelineTotal / pageSize) : 0;
   const paginationItems = totalPages > 1 ? buildPaginationItems(currentPage, totalPages) : [];
 
   useEffect(() => {
@@ -473,7 +495,7 @@ export default function TopicDetailPage({
                     <p className="text-sm text-slate-500">
                       Page {currentPage} of {totalPages}
                       <span className="mx-2 text-slate-300">|</span>
-                      Showing {(currentPage - 1) * TIMELINE_PAGE_SIZE + 1}-{Math.min(currentPage * TIMELINE_PAGE_SIZE, timelineTotal)} of {timelineTotal}
+                      Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, timelineTotal)} of {timelineTotal}
                     </p>
 
                     <div className="flex flex-col gap-3 lg:items-end">
@@ -519,7 +541,24 @@ export default function TopicDetailPage({
                         </button>
                       </div>
 
-                      <form onSubmit={handlePageJump} className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                      <div className="flex flex-wrap items-center justify-end gap-3 text-sm text-slate-600">
+                        <label htmlFor="timeline-page-size" className="flex items-center gap-2">
+                          <span className="font-medium text-slate-600">Per page</span>
+                          <select
+                            id="timeline-page-size"
+                            value={pageSize}
+                            onChange={(event) => setPageSize(Number.parseInt(event.target.value, 10))}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
+                          >
+                            {ALLOWED_TIMELINE_PAGE_SIZES.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <form onSubmit={handlePageJump} className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                         <label htmlFor="timeline-page-jump" className="font-medium text-slate-600">
                           Jump to page
                         </label>
@@ -539,7 +578,8 @@ export default function TopicDetailPage({
                         >
                           Go
                         </button>
-                      </form>
+                        </form>
+                      </div>
                     </div>
                   </div>
               )}
