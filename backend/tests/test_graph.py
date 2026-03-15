@@ -114,7 +114,9 @@ class TestGraphProjectionBuilder:
         assert len(nodes) == 2
 
     def test_rebuild_creates_nodes_for_persons(self, db_session: Session):
-        make_person(db_session, parliament_id=1, name_display="Alice")
+        alice = make_person(db_session, parliament_id=1, name_display="Alice")
+        alice.constituency = "Example Central"
+        alice.thumbnail_url = "https://example.com/alice.jpg"
         make_person(db_session, parliament_id=2, name_display="Bob")
         db_session.flush()
 
@@ -128,6 +130,11 @@ class TestGraphProjectionBuilder:
         # Verify properties are set
         for node in person_nodes:
             assert node.properties is not None or node.properties is None
+        alice_node = next(node for node in person_nodes if node.label == "Alice")
+        assert alice_node.properties is not None
+        assert alice_node.properties["constituency"] == "Example Central"
+        assert alice_node.properties["thumbnail_url"] == "https://example.com/alice.jpg"
+        assert alice_node.properties["is_active"] is True
 
     def test_rebuild_creates_question_node_properties(self, db_session: Session):
         asker = make_person(db_session, parliament_id=77, name_display="Iqbal Mohamed")
@@ -226,6 +233,36 @@ class TestGraphProjectionBuilder:
         assert len(edges) == 1
         assert edges[0].properties is not None
         assert edges[0].properties["confidence"] == 0.9
+
+    def test_rebuild_creates_asked_by_edges_with_question_metadata(self, db_session: Session):
+        asker = make_person(db_session, parliament_id=44, name_display="Ben Obese-Jecty")
+        db_session.add(
+            WrittenQuestion(
+                parliament_question_id=8001,
+                uin="118059",
+                heading="Iran: Armed Conflict",
+                question_text="Will the House vote on UK support for US operations in Iran?",
+                house="Commons",
+                date_tabled=date(2026, 3, 4),
+                date_answered=date(2026, 3, 13),
+                asking_member_id=asker.parliament_id,
+                answering_body="Ministry of Defence",
+            )
+        )
+        db_session.flush()
+
+        builder = GraphProjectionBuilder(db_session)
+        builder.rebuild()
+
+        asked_by_edge = db_session.execute(
+            select(GraphEdge).where(GraphEdge.edge_type == "ASKED_BY")
+        ).scalar_one()
+        assert asked_by_edge.properties is not None
+        assert asked_by_edge.properties["question_uin"] == "118059"
+        assert asked_by_edge.properties["status"] == "answered"
+        assert asked_by_edge.properties["date_tabled"] == "2026-03-04"
+        assert asked_by_edge.properties["date_answered"] == "2026-03-13"
+        assert asked_by_edge.properties["question_official_url"] == "https://questions-statements.parliament.uk/written-questions/detail/2026-03-04/118059"
 
     def test_rebuild_is_idempotent(self, db_session: Session):
         make_topic(db_session)

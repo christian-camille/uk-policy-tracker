@@ -83,6 +83,7 @@ class GraphService:
                 EdgeResponse(
                     edge_type=edge.edge_type,
                     direction="outgoing",
+                    properties=edge.properties,
                     connected_node=NodeResponse.model_validate(connected_node),
                 )
             )
@@ -93,6 +94,7 @@ class GraphService:
                 EdgeResponse(
                     edge_type=edge.edge_type,
                     direction="incoming",
+                    properties=edge.properties,
                     connected_node=NodeResponse.model_validate(connected_node),
                 )
             )
@@ -162,8 +164,33 @@ class GraphProjectionBuilder:
         node_map: dict[tuple[str, int], int] = {}
 
         node_map.update(self._create_nodes_for(Topic, "topic", "id", "label"))
-        node_map.update(self._create_nodes_for(ContentItem, "content_item", "id", "title"))
-        node_map.update(self._create_nodes_for(Organisation, "organisation", "id", "title"))
+        node_map.update(
+            self._create_nodes_for(
+                ContentItem,
+                "content_item",
+                "id",
+                "title",
+                properties_fn=lambda item: {
+                    "document_type": item.document_type,
+                    "public_updated_at": item.public_updated_at.isoformat()
+                    if item.public_updated_at
+                    else None,
+                    "govuk_url": item.govuk_url,
+                },
+            )
+        )
+        node_map.update(
+            self._create_nodes_for(
+                Organisation,
+                "organisation",
+                "id",
+                "title",
+                properties_fn=lambda org: {
+                    "acronym": org.acronym,
+                    "slug": org.slug,
+                },
+            )
+        )
         node_map.update(
             self._create_nodes_for(
                 Person,
@@ -174,6 +201,8 @@ class GraphProjectionBuilder:
                     "party": p.party,
                     "house": p.house,
                     "constituency": p.constituency,
+                    "thumbnail_url": p.thumbnail_url,
+                    "is_active": p.is_active,
                 },
             )
         )
@@ -359,6 +388,20 @@ class GraphProjectionBuilder:
                             source_node_id=src,
                             target_node_id=tgt,
                             edge_type="ASKED_BY",
+                            properties={
+                                "question_uin": q.uin,
+                                "status": "answered" if q.date_answered else "tabled",
+                                "date_tabled": q.date_tabled.isoformat()
+                                if q.date_tabled
+                                else None,
+                                "date_answered": q.date_answered.isoformat()
+                                if q.date_answered
+                                else None,
+                                "answering_body": q.answering_body,
+                                "question_official_url": build_written_question_url(
+                                    q.date_tabled, q.uin
+                                ),
+                            },
                         )
                     )
                     count += 1

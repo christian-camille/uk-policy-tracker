@@ -13,6 +13,19 @@ function getString(properties: EntityProperties | null | undefined, key: string)
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function getBoolean(properties: EntityProperties | null | undefined, key: string) {
+  const value = properties?.[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function getInitials(label: string) {
+  return label
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
 function renderGenericProperties(properties: EntityProperties) {
   return (
     <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
@@ -142,6 +155,71 @@ function QuestionDetail({
   );
 }
 
+function PersonDetail({
+  label,
+  properties,
+  connectionCount,
+}: {
+  label: string;
+  properties: EntityProperties;
+  connectionCount: number;
+}) {
+  const thumbnailUrl = getString(properties, "thumbnail_url");
+  const detailPairs = [
+    ["Party", getString(properties, "party")],
+    ["House", getString(properties, "house")],
+    ["Constituency", getString(properties, "constituency")],
+    [
+      "Status",
+      getBoolean(properties, "is_active") === false ? "Inactive" : "Active member",
+    ],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),_transparent_40%),linear-gradient(135deg,#f8fafc_0%,#ffffff_60%,#eff6ff_100%)] px-6 py-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 bg-cover bg-center text-xl font-semibold text-slate-700"
+              style={thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})` } : undefined}
+            >
+              {!thumbnailUrl && getInitials(label)}
+            </div>
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-sky-700">
+                  Key Actor
+                </span>
+                {getString(properties, "party") && (
+                  <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-slate-600 shadow-sm">
+                    {getString(properties, "party")}
+                  </span>
+                )}
+              </div>
+              <h1 className="text-2xl font-bold text-slate-950">{label}</h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {connectionCount} {connectionCount === 1 ? "connection" : "connections"} in the current graph
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6">
+        <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          {detailPairs.map(([labelText, value]) => (
+            <div key={labelText}>
+              <dt className="text-slate-500">{labelText}</dt>
+              <dd className="mt-1 font-medium text-slate-900">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
 export default function EntityDetailPage({
   params,
 }: {
@@ -177,6 +255,12 @@ export default function EntityDetailPage({
         <>
           {data.node.entity_type === "question" && data.node.properties ? (
             <QuestionDetail label={data.node.label} properties={data.node.properties} />
+          ) : data.node.entity_type === "person" && data.node.properties ? (
+            <PersonDetail
+              label={data.node.label}
+              properties={data.node.properties}
+              connectionCount={data.connections.length}
+            />
           ) : (
             <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-3 flex items-center gap-3">
@@ -196,7 +280,7 @@ export default function EntityDetailPage({
             Connections
             <span className="ml-2 text-sm font-normal text-slate-400">({data.connections.length})</span>
           </h2>
-          <ConnectionList connections={data.connections} />
+          <ConnectionList connections={data.connections} focusEntityType={data.node.entity_type} />
         </>
       )}
     </main>

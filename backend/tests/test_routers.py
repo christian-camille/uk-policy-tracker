@@ -452,6 +452,46 @@ async def test_entity_lookup_by_source(client, async_session):
 
 
 @pytest.mark.asyncio
+async def test_entity_detail_includes_connection_properties(client, async_session):
+    person_node = GraphNode(
+        entity_type="person",
+        entity_id=301,
+        label="Ben Obese-Jecty",
+        properties={"party": "Conservative", "house": "Commons"},
+    )
+    question_node = GraphNode(
+        entity_type="question",
+        entity_id=201,
+        label="Iran: Armed Conflict",
+        properties={"answering_body": "Ministry of Defence"},
+    )
+    async_session.add_all([person_node, question_node])
+    await async_session.flush()
+
+    async_session.add(
+        GraphEdge(
+            source_node_id=question_node.id,
+            target_node_id=person_node.id,
+            edge_type="ASKED_BY",
+            properties={
+                "question_uin": "118059",
+                "status": "answered",
+                "date_answered": "2026-03-13",
+            },
+        )
+    )
+    await async_session.commit()
+
+    resp = await client.get(f"/api/entities/{person_node.id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["connections"]) == 1
+    assert data["connections"][0]["properties"]["question_uin"] == "118059"
+    assert data["connections"][0]["properties"]["status"] == "answered"
+
+
+@pytest.mark.asyncio
 async def test_topic_actors_return_enriched_person_labels(client, async_session):
     create_resp = await client.post(
         "/api/topics",

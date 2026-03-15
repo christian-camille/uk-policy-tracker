@@ -116,9 +116,16 @@ class TestEntitySchemas:
         node = NodeResponse(
             id=2, entity_type="bill", entity_id=200, label="Bill A", properties=None
         )
-        er = EdgeResponse(edge_type="MENTIONS", direction="outgoing", connected_node=node)
+        er = EdgeResponse(
+            edge_type="MENTIONS",
+            direction="outgoing",
+            properties={"confidence": 0.9},
+            connected_node=node,
+        )
         assert er.edge_type == "MENTIONS"
         assert er.direction == "outgoing"
+        assert er.properties is not None
+        assert er.properties["confidence"] == 0.9
 
     def test_entity_detail_response(self):
         node = NodeResponse(

@@ -14,6 +14,7 @@ class NodeResponse(BaseModel):
 class EdgeResponse(BaseModel):
     edge_type: str
     direction: str
+    properties: dict | None = None
     connected_node: NodeResponse
 
 

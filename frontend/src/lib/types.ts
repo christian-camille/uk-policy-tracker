@@ -79,6 +79,7 @@ export interface Actor {
 export interface GraphEdge {
   edge_type: string;
   direction: "outgoing" | "incoming";
+  properties?: Record<string, unknown> | null;
   connected_node: GraphNode;
 }
 
