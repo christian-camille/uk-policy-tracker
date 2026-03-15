@@ -35,6 +35,12 @@ def build_written_question_url(date_tabled: date | None, uin: str | None) -> str
     )
 
 
+def build_bill_url(parliament_bill_id: int | None) -> str | None:
+    if not parliament_bill_id:
+        return None
+    return f"https://bills.parliament.uk/bills/{parliament_bill_id}"
+
+
 def _extract_asking_member_ids(questions: list[dict]) -> list[int]:
     member_ids = {
         member_id

@@ -276,3 +276,37 @@ class TestGraphProjectionBuilder:
         # Second rebuild should produce the same counts (truncates first)
         assert stats1["nodes"] == stats2["nodes"]
         assert stats1["edges"] == stats2["edges"]
+
+    def test_rebuild_creates_bill_node_properties(self, db_session: Session):
+        from app.models.silver import Bill
+
+        db_session.add(
+            Bill(
+                parliament_bill_id=12345,
+                short_title="Groceries Labelling (Size Reduction) Bill",
+                current_house="Commons",
+                originating_house="Commons",
+                last_update=datetime(2026, 3, 1, 12, 0, 0),
+                is_act=False,
+                is_defeated=False,
+                current_stage="2nd reading",
+            )
+        )
+        db_session.flush()
+
+        builder = GraphProjectionBuilder(db_session)
+        builder.rebuild()
+
+        bill_node = db_session.execute(
+            select(GraphNode).where(GraphNode.entity_type == "bill")
+        ).scalar_one()
+        assert bill_node.properties is not None
+        assert bill_node.properties["current_house"] == "Commons"
+        assert bill_node.properties["originating_house"] == "Commons"
+        assert bill_node.properties["current_stage"] == "2nd reading"
+        assert bill_node.properties["is_act"] is False
+        assert bill_node.properties["is_defeated"] is False
+        assert bill_node.properties["parliament_bill_id"] == 12345
+        assert bill_node.properties["parliament_url"] == "https://bills.parliament.uk/bills/12345"
+        assert bill_node.properties["last_update"] is not None
+        assert "2026-03-01" in bill_node.properties["last_update"]

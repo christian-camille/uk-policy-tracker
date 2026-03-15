@@ -1,5 +1,6 @@
 "use client";
 
+import { format } from "date-fns";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -50,6 +51,87 @@ function renderGenericProperties(properties: EntityProperties) {
         );
       })}
     </dl>
+  );
+}
+
+function BillDetail({
+  label,
+  properties,
+  connectionCount,
+}: {
+  label: string;
+  properties: EntityProperties;
+  connectionCount: number;
+}) {
+  const isAct = getBoolean(properties, "is_act");
+  const isDefeated = getBoolean(properties, "is_defeated");
+  const currentHouse = getString(properties, "current_house");
+  const originatingHouse = getString(properties, "originating_house");
+  const currentStage = getString(properties, "current_stage");
+  const lastUpdate = getString(properties, "last_update");
+  const parliamentUrl = getString(properties, "parliament_url");
+
+  const detailPairs = [
+    ["Current Stage", currentStage],
+    ["Current House", currentHouse],
+    ["Originating House", originatingHouse],
+    ["Last Updated", lastUpdate ? format(new Date(lastUpdate), "d MMM yyyy") : null],
+  ].filter(([, value]) => Boolean(value)) as [string, string][];
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(217,119,6,0.12),_transparent_40%),linear-gradient(135deg,#f8fafc_0%,#ffffff_55%,#fffbeb_100%)] px-6 py-6">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-700">
+            Bill
+          </span>
+          {isAct && (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-emerald-700">
+              Act of Parliament
+            </span>
+          )}
+          {isDefeated && !isAct && (
+            <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-red-700">
+              Defeated
+            </span>
+          )}
+          {!isAct && !isDefeated && (
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-blue-700">
+              In progress
+            </span>
+          )}
+        </div>
+        <h1 className="max-w-3xl text-2xl font-bold text-slate-950">{label}</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {connectionCount} {connectionCount === 1 ? "connection" : "connections"} in the current graph
+        </p>
+        {parliamentUrl && (
+          <div className="mt-4">
+            <a
+              href={parliamentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-amber-800 underline decoration-amber-300 underline-offset-2 hover:text-amber-950"
+            >
+              Open Parliament record
+            </a>
+          </div>
+        )}
+      </div>
+
+      {detailPairs.length > 0 && (
+        <div className="p-6">
+          <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+            {detailPairs.map(([labelText, value]) => (
+              <div key={labelText}>
+                <dt className="text-slate-500">{labelText}</dt>
+                <dd className="mt-1 font-medium text-slate-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -264,6 +346,12 @@ export default function EntityDetailPage({
             <QuestionDetail label={data.node.label} properties={data.node.properties} />
           ) : data.node.entity_type === "person" && data.node.properties ? (
             <PersonDetail
+              label={data.node.label}
+              properties={data.node.properties}
+              connectionCount={data.connections.length}
+            />
+          ) : data.node.entity_type === "bill" && data.node.properties ? (
+            <BillDetail
               label={data.node.label}
               properties={data.node.properties}
               connectionCount={data.connections.length}

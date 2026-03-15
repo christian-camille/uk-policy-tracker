@@ -20,7 +20,7 @@ from app.models.silver import (
     WrittenQuestion,
 )
 from app.schemas.entities import EdgeResponse, EntityDetailResponse, NodeResponse
-from app.services.parliament import build_written_question_url
+from app.services.parliament import build_bill_url, build_written_question_url
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +216,11 @@ class GraphProjectionBuilder:
                     "current_house": b.current_house,
                     "current_stage": b.current_stage,
                     "is_act": b.is_act,
+                    "originating_house": b.originating_house,
+                    "is_defeated": b.is_defeated,
+                    "last_update": b.last_update.isoformat() if b.last_update else None,
+                    "parliament_bill_id": b.parliament_bill_id,
+                    "parliament_url": build_bill_url(b.parliament_bill_id),
                 },
             )
         )

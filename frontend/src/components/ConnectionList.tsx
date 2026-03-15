@@ -119,13 +119,16 @@ function getConnectionSummary(connection: GraphEdge) {
       };
     }
     case "bill": {
+      const isDefeated = getBoolean(nodeProperties, "is_defeated");
+      const lastUpdate = formatDateValue(getString(nodeProperties, "last_update"));
       return {
         summary: [
           getString(nodeProperties, "current_stage"),
           getString(nodeProperties, "current_house"),
           getBoolean(nodeProperties, "is_act") ? "Act" : null,
+          isDefeated ? "Defeated" : null,
         ].filter(Boolean) as string[],
-        detail: [],
+        detail: lastUpdate ? [`Updated ${lastUpdate}`] : [],
       };
     }
     case "division": {
@@ -184,6 +187,11 @@ function getActionLinks(connection: GraphEdge) {
   const govukUrl = getString(nodeProperties, "govuk_url");
   if (connection.connected_node.entity_type === "content_item" && govukUrl) {
     links.push({ href: govukUrl, label: "Open GOV.UK source" });
+  }
+
+  const billUrl = getString(nodeProperties, "parliament_url");
+  if (connection.connected_node.entity_type === "bill" && billUrl) {
+    links.push({ href: billUrl, label: "Open Parliament record" });
   }
 
   return links;
