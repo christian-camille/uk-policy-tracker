@@ -36,6 +36,12 @@ export interface TimelineEvent {
   source_url: string | null;
   source_entity_type: string;
   source_entity_id: number;
+  question_uin?: string | null;
+  question_text?: string | null;
+  question_house?: string | null;
+  question_date_tabled?: string | null;
+  question_date_answered?: string | null;
+  asking_member_name?: string | null;
 }
 
 export interface TimelineResponse {

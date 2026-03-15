@@ -7,12 +7,50 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.silver import ActivityEvent, Topic
+from app.models.silver import ActivityEvent, Person, Topic, WrittenQuestion
 from app.schemas.timeline import TimelineEvent, TimelineResponse
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
 from app.services.refresh import run_topic_refresh
 
 router = APIRouter(prefix="/topics", tags=["topics"])
+
+
+async def _load_question_details(
+    db: AsyncSession, events: list[ActivityEvent]
+) -> dict[int, dict[str, object | None]]:
+    question_ids = [
+        event.source_entity_id
+        for event in events
+        if event.source_entity_type == "question"
+    ]
+    if not question_ids:
+        return {}
+
+    stmt = (
+        select(
+            WrittenQuestion.id,
+            WrittenQuestion.uin,
+            WrittenQuestion.question_text,
+            WrittenQuestion.house,
+            WrittenQuestion.date_tabled,
+            WrittenQuestion.date_answered,
+            Person.name_display.label("asking_member_name"),
+        )
+        .outerjoin(Person, Person.parliament_id == WrittenQuestion.asking_member_id)
+        .where(WrittenQuestion.id.in_(question_ids))
+    )
+    result = await db.execute(stmt)
+    return {
+        row.id: {
+            "question_uin": row.uin,
+            "question_text": row.question_text,
+            "question_house": row.house,
+            "question_date_tabled": row.date_tabled,
+            "question_date_answered": row.date_answered,
+            "asking_member_name": row.asking_member_name,
+        }
+        for row in result
+    }
 
 
 def _parse_iso_datetime(value: str, *, field_name: str, end_of_day: bool = False) -> datetime:
@@ -177,7 +215,26 @@ async def get_topic_timeline(
         .offset(offset)
     )
     result = await db.execute(events_stmt)
-    events = [TimelineEvent.model_validate(row) for row in result.scalars()]
+    raw_events = list(result.scalars())
+    question_details = await _load_question_details(db, raw_events)
+    events = [
+        TimelineEvent(
+            id=event.id,
+            event_type=event.event_type,
+            event_date=event.event_date,
+            title=event.title,
+            summary=event.summary,
+            source_url=event.source_url,
+            source_entity_type=event.source_entity_type,
+            source_entity_id=event.source_entity_id,
+            **(
+                question_details.get(event.source_entity_id, {})
+                if event.source_entity_type == "question"
+                else {}
+            ),
+        )
+        for event in raw_events
+    ]
 
     return TimelineResponse(
         topic_id=topic_id,

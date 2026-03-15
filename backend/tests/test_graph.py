@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from sqlalchemy import select
@@ -128,6 +128,35 @@ class TestGraphProjectionBuilder:
         # Verify properties are set
         for node in person_nodes:
             assert node.properties is not None or node.properties is None
+
+    def test_rebuild_creates_question_node_properties(self, db_session: Session):
+        asker = make_person(db_session, parliament_id=77, name_display="Iqbal Mohamed")
+        db_session.add(
+            WrittenQuestion(
+                parliament_question_id=9001,
+                uin="12345",
+                heading="Iran: Armed Conflict",
+                question_text="What assessment has the Government made of recent military escalations involving Iran?",
+                house="Commons",
+                date_tabled=date(2026, 3, 10),
+                date_answered=date(2026, 3, 12),
+                asking_member_id=asker.parliament_id,
+                answering_body="Foreign, Commonwealth and Development Office",
+            )
+        )
+        db_session.flush()
+
+        builder = GraphProjectionBuilder(db_session)
+        builder.rebuild()
+
+        question_node = db_session.execute(
+            select(GraphNode).where(GraphNode.entity_type == "question")
+        ).scalar_one()
+        assert question_node.properties is not None
+        assert question_node.properties["uin"] == "12345"
+        assert question_node.properties["asked_by"] == "Iqbal Mohamed"
+        assert question_node.properties["status"] == "answered"
+        assert question_node.properties["question_text"].startswith("What assessment")
 
     def test_rebuild_creates_published_by_edges(self, db_session: Session):
         ci = make_content_item(db_session)

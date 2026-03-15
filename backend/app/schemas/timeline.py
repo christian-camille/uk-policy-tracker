@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +14,12 @@ class TimelineEvent(BaseModel):
     source_url: str | None
     source_entity_type: str
     source_entity_id: int
+    question_uin: str | None = None
+    question_text: str | None = None
+    question_house: str | None = None
+    question_date_tabled: date | None = None
+    question_date_answered: date | None = None
+    asking_member_name: str | None = None
 
 
 class TimelineResponse(BaseModel):

@@ -54,10 +54,14 @@ export default function EntityDetailPage({
                     return null;
                   }
 
+                  const isLongText = key === "question_text";
+
                   return (
-                    <div key={key}>
+                    <div key={key} className={isLongText ? "sm:col-span-2" : undefined}>
                       <dt className="capitalize text-slate-500">{key.replace(/_/g, " ")}</dt>
-                      <dd className="font-medium text-slate-900">{String(value)}</dd>
+                      <dd className={`font-medium text-slate-900 ${isLongText ? "whitespace-pre-wrap leading-relaxed" : ""}`}>
+                        {String(value)}
+                      </dd>
                     </div>
                   );
                 })}

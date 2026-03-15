@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from app.models.gold import GraphEdge, GraphNode
-from app.models.silver import ActivityEvent
+from app.models.silver import ActivityEvent, Person, WrittenQuestion
 
 
 async def seed_timeline_events(async_session, topic_id: int) -> list[ActivityEvent]:
@@ -276,6 +276,65 @@ async def test_timeline_filters_by_text_search(client, async_session):
         "bill_stage",
         "question_answered",
     ]
+
+
+@pytest.mark.asyncio
+async def test_timeline_includes_written_question_details(client, async_session):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Middle East", "search_queries": ["iran"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    async_session.add(
+        Person(
+            parliament_id=77,
+            name_display="Iqbal Mohamed",
+            is_active=True,
+        )
+    )
+    await async_session.flush()
+
+    question = WrittenQuestion(
+        parliament_question_id=501,
+        uin="12345",
+        heading="Iran: Armed Conflict",
+        question_text="What assessment has the Government made of recent military escalations involving Iran?",
+        house="Commons",
+        date_tabled=datetime(2026, 3, 10).date(),
+        date_answered=datetime(2026, 3, 12).date(),
+        asking_member_id=77,
+        answering_body="Foreign, Commonwealth and Development Office",
+    )
+    async_session.add(question)
+    await async_session.flush()
+
+    async_session.add(
+        ActivityEvent(
+            event_type="question_answered",
+            event_date=datetime(2026, 3, 12, 12, 0, 0),
+            title=question.heading,
+            summary=question.answering_body,
+            source_url=None,
+            source_entity_type="question",
+            source_entity_id=question.id,
+            topic_id=topic_id,
+        )
+    )
+    await async_session.commit()
+
+    resp = await client.get(f"/api/topics/{topic_id}/timeline")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    event = data["events"][0]
+    assert event["question_uin"] == "12345"
+    assert event["question_house"] == "Commons"
+    assert event["asking_member_name"] == "Iqbal Mohamed"
+    assert event["question_text"].startswith("What assessment has the Government made")
+    assert event["question_date_tabled"] == "2026-03-10"
+    assert event["question_date_answered"] == "2026-03-12"
 
 
 @pytest.mark.asyncio

@@ -71,8 +71,13 @@ class TestTimelineSchemas:
             source_url="https://example.com",
             source_entity_type="content_item",
             source_entity_id=10,
+            question_uin="12345",
+            question_text="What is the government doing?",
+            question_house="Commons",
+            asking_member_name="Alex Sobel",
         )
         assert te.event_type == "govuk_publication"
+        assert te.question_uin == "12345"
 
     def test_timeline_response(self):
         tr = TimelineResponse(topic_id=1, events=[], total=0, has_more=False)

@@ -189,7 +189,15 @@ class GraphProjectionBuilder:
                 },
             )
         )
-        node_map.update(self._create_nodes_for(WrittenQuestion, "question", "id", "heading"))
+        node_map.update(
+            self._create_nodes_for(
+                WrittenQuestion,
+                "question",
+                "id",
+                "heading",
+                properties_fn=self._question_properties,
+            )
+        )
         node_map.update(
             self._create_nodes_for(
                 Division,
@@ -246,6 +254,26 @@ class GraphProjectionBuilder:
             mapping[(entity_type, entity_id)] = node.id
 
         return mapping
+
+    def _question_properties(self, question: WrittenQuestion) -> dict[str, str | None]:
+        asking_member_name = None
+        if question.asking_member_id is not None:
+            asking_member_name = self.db.execute(
+                select(Person.name_display).where(
+                    Person.parliament_id == question.asking_member_id
+                )
+            ).scalar_one_or_none()
+
+        return {
+            "uin": question.uin,
+            "house": question.house,
+            "question_text": question.question_text,
+            "asked_by": asking_member_name,
+            "answering_body": question.answering_body,
+            "status": "answered" if question.date_answered else "tabled",
+            "date_tabled": question.date_tabled.isoformat() if question.date_tabled else None,
+            "date_answered": question.date_answered.isoformat() if question.date_answered else None,
+        }
 
     def _create_published_by_edges(
         self, node_map: dict[tuple[str, int], int]

@@ -30,6 +30,12 @@ export function Timeline({
           label: event.event_type,
         };
         const Icon = config.icon;
+        const isQuestionEvent = event.source_entity_type === "question";
+        const questionMeta = [
+          event.asking_member_name ? `Asked by ${event.asking_member_name}` : null,
+          event.question_house,
+          event.question_uin ? `UIN ${event.question_uin}` : null,
+        ].filter(Boolean);
 
         return (
           <div
@@ -68,8 +74,31 @@ export function Timeline({
                 )}
               </h3>
 
+              {isQuestionEvent && questionMeta.length > 0 && (
+                <p className="mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  {questionMeta.join(" • ")}
+                </p>
+              )}
+
+              {isQuestionEvent && event.question_text && (
+                <p className="mt-2 line-clamp-4 whitespace-pre-line text-sm text-slate-600">
+                  {event.question_text}
+                </p>
+              )}
+
               {event.summary && (
                 <p className="mt-1 line-clamp-2 text-sm text-slate-500">{event.summary}</p>
+              )}
+
+              {isQuestionEvent && (event.question_date_tabled || event.question_date_answered) && (
+                <p className="mt-2 text-xs text-slate-400">
+                  {[
+                    event.question_date_tabled ? `Tabled ${format(new Date(event.question_date_tabled), "d MMM yyyy")}` : null,
+                    event.question_date_answered ? `Answered ${format(new Date(event.question_date_answered), "d MMM yyyy")}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
               )}
 
               <div className="mt-2">
