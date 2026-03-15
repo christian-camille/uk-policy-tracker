@@ -209,6 +209,84 @@ function compareConnections(a: GraphEdge, b: GraphEdge, sortMode: keyof typeof S
   return aRank - bRank || a.connected_node.label.localeCompare(b.connected_node.label);
 }
 
+function shouldGroupConnections(visibleConnections: GraphEdge[]) {
+  const typeCount = new Set(
+    visibleConnections.map((connection) => connection.connected_node.entity_type)
+  ).size;
+  return visibleConnections.length >= 6 || typeCount > 2;
+}
+
+function defaultGroupCollapsed(entityType: string, focusEntityType?: string) {
+  if (focusEntityType === "person") {
+    return entityType !== "question";
+  }
+
+  return false;
+}
+
+function renderConnectionCard(connection: GraphEdge, index: number) {
+  const entityConfig = ENTITY_TYPE_CONFIG[connection.connected_node.entity_type] ?? {
+    badgeClassName: "bg-slate-100 text-slate-700 border border-slate-200",
+    label: formatEntityType(connection.connected_node.entity_type),
+  };
+  const summary = getConnectionSummary(connection);
+  const actionLinks = getActionLinks(connection);
+
+  return (
+    <div
+      key={`${connection.direction}-${connection.edge_type}-${connection.connected_node.id}-${index}`}
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${entityConfig.badgeClassName}`}>
+              {entityConfig.label}
+            </span>
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              {connection.direction}
+            </span>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              {connection.edge_type.replace(/_/g, " ")}
+            </span>
+          </div>
+
+          <Link
+            href={`/entities/${connection.connected_node.id}`}
+            className="text-base font-semibold text-slate-900 hover:text-blue-800 hover:underline"
+          >
+            {connection.connected_node.label}
+          </Link>
+
+          {summary.summary.length > 0 && (
+            <p className="mt-2 text-sm text-slate-600">{summary.summary.join(" • ")}</p>
+          )}
+
+          {summary.detail.length > 0 && (
+            <p className="mt-1 text-sm text-slate-500">{summary.detail.join(" • ")}</p>
+          )}
+
+          {actionLinks.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+              {actionLinks.map((link) => (
+                <a
+                  key={`${connection.connected_node.id}-${link.href}`}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-blue-700 underline decoration-blue-200 underline-offset-2 hover:text-blue-900"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConnectionList({
   connections,
   focusEntityType,
@@ -219,6 +297,7 @@ export function ConnectionList({
   const [entityFilter, setEntityFilter] = useState("all");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [sortMode, setSortMode] = useState<keyof typeof SORT_LABELS>("relevance");
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   if (connections.length === 0) {
     return (
@@ -243,6 +322,18 @@ export function ConnectionList({
       return true;
     })
     .sort((a, b) => compareConnections(a, b, sortMode, focusEntityType));
+
+  const groupedConnections = Array.from(
+    visibleConnections.reduce((groups, connection) => {
+      const entityType = connection.connected_node.entity_type;
+      if (!groups.has(entityType)) {
+        groups.set(entityType, []);
+      }
+      groups.get(entityType)?.push(connection);
+      return groups;
+    }, new Map<string, GraphEdge[]>())
+  );
+  const useGroupedView = shouldGroupConnections(visibleConnections);
 
   return (
     <div className="space-y-4">
@@ -306,68 +397,61 @@ export function ConnectionList({
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
           No connections match the current filters.
         </div>
-      ) : visibleConnections.map((connection, index) => {
-        const entityConfig = ENTITY_TYPE_CONFIG[connection.connected_node.entity_type] ?? {
-          badgeClassName: "bg-slate-100 text-slate-700 border border-slate-200",
-          label: formatEntityType(connection.connected_node.entity_type),
-        };
-        const summary = getConnectionSummary(connection);
-        const actionLinks = getActionLinks(connection);
+      ) : useGroupedView ? (
+        groupedConnections.map(([entityType, groupConnections]) => {
+          const entityConfig = ENTITY_TYPE_CONFIG[entityType] ?? {
+            badgeClassName: "bg-slate-100 text-slate-700 border border-slate-200",
+            label: formatEntityType(entityType),
+          };
+          const isCollapsed =
+            collapsedGroups[entityType] ?? defaultGroupCollapsed(entityType, focusEntityType);
 
-        return (
-        <div
-          key={`${connection.direction}-${connection.edge_type}-${connection.connected_node.id}-${index}`}
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${entityConfig.badgeClassName}`}>
-                  {entityConfig.label}
-                </span>
-                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                  {connection.direction}
-                </span>
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {connection.edge_type.replace(/_/g, " ")}
-                </span>
-              </div>
-
-              <Link
-                href={`/entities/${connection.connected_node.id}`}
-                className="text-base font-semibold text-slate-900 hover:text-blue-800 hover:underline"
+          return (
+            <section
+              key={entityType}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setCollapsedGroups((current) => ({
+                    ...current,
+                    [entityType]: !isCollapsed,
+                  }))
+                }
+                className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 text-left"
               >
-                {connection.connected_node.label}
-              </Link>
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${entityConfig.badgeClassName}`}>
+                    {entityConfig.label}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">
+                      {groupConnections.length} {groupConnections.length === 1 ? "connection" : "connections"}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      {isCollapsed ? "Collapsed" : "Expanded"}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-slate-500">
+                  {isCollapsed ? "Show" : "Hide"}
+                </span>
+              </button>
 
-              {summary.summary.length > 0 && (
-                <p className="mt-2 text-sm text-slate-600">{summary.summary.join(" • ")}</p>
-              )}
-
-              {summary.detail.length > 0 && (
-                <p className="mt-1 text-sm text-slate-500">{summary.detail.join(" • ")}</p>
-              )}
-
-              {actionLinks.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                  {actionLinks.map((link) => (
-                    <a
-                      key={`${connection.connected_node.id}-${link.href}`}
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-blue-700 underline decoration-blue-200 underline-offset-2 hover:text-blue-900"
-                    >
-                      {link.label}
-                    </a>
-                  ))}
+              {!isCollapsed && (
+                <div className="space-y-3 p-4">
+                  {groupConnections.map((connection, index) =>
+                    renderConnectionCard(connection, index)
+                  )}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-        );
-      })}
+            </section>
+          );
+        })
+      ) : (
+        visibleConnections.map((connection, index) => renderConnectionCard(connection, index))
+      )}
     </div>
   );
 }
