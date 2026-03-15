@@ -27,6 +27,28 @@ export function useCreateTopic() {
   });
 }
 
+export function useUpdateTopic() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      topicId,
+      label,
+      searchQueries,
+    }: {
+      topicId: number;
+      label?: string;
+      searchQueries?: string[];
+    }) => api.updateTopic(topicId, { label, searchQueries }),
+    onSuccess: (_data: unknown, variables: { topicId: number; label?: string; searchQueries?: string[] }) => {
+      queryClient.invalidateQueries({ queryKey: ["topics"] });
+      queryClient.invalidateQueries({ queryKey: ["topic", variables.topicId] });
+      queryClient.invalidateQueries({ queryKey: ["actors", variables.topicId] });
+      queryClient.invalidateQueries({ queryKey: ["timeline", variables.topicId] });
+    },
+  });
+}
+
 export function useDeleteTopic() {
   const queryClient = useQueryClient();
 

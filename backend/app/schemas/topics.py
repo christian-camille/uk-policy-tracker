@@ -9,6 +9,11 @@ class TopicCreate(BaseModel):
     is_global: bool = True
 
 
+class TopicUpdate(BaseModel):
+    label: str | None = None
+    search_queries: list[str] | None = None
+
+
 class TopicSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

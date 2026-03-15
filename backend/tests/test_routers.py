@@ -172,6 +172,63 @@ async def test_get_topic_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_update_topic_label_and_queries(client):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Housing", "search_queries": ["housing"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    resp = await client.patch(
+        f"/api/topics/{topic_id}",
+        json={"label": "Housing Reform", "search_queries": ["housing", "planning reform"]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["label"] == "Housing Reform"
+    assert data["slug"] == "housing-reform"
+    assert data["search_queries"] == ["housing", "planning reform"]
+
+
+@pytest.mark.asyncio
+async def test_update_topic_duplicate_slug_returns_409(client):
+    await client.post(
+        "/api/topics",
+        json={"label": "Original Topic", "search_queries": ["one"]},
+    )
+    second_resp = await client.post(
+        "/api/topics",
+        json={"label": "Different Topic", "search_queries": ["two"]},
+    )
+    second_id = second_resp.json()["id"]
+
+    resp = await client.patch(
+        f"/api/topics/{second_id}",
+        json={"label": "Original Topic"},
+    )
+
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_update_topic_rejects_empty_queries(client):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Healthcare", "search_queries": ["healthcare"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    resp = await client.patch(
+        f"/api/topics/{topic_id}",
+        json={"search_queries": ["   ", ""]},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Topic search queries cannot be empty"
+
+
+@pytest.mark.asyncio
 async def test_delete_topic(client):
     create_resp = await client.post(
         "/api/topics",

@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime
 from typing import Literal
@@ -10,7 +11,7 @@ from app.database import get_db
 from app.models.silver import ActivityEvent, Person, Topic, WrittenQuestion
 from app.schemas.timeline import TimelineEvent, TimelineResponse
 from app.services.parliament import build_written_question_url
-from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
+from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary, TopicUpdate
 from app.services.refresh import run_topic_refresh
 
 router = APIRouter(prefix="/topics", tags=["topics"])
@@ -84,6 +85,48 @@ def _slugify(text: str) -> str:
     return slug.strip("-")
 
 
+def _parse_search_queries_text(raw: str) -> list[str]:
+    normalized_raw = raw.strip()
+    if not normalized_raw:
+        return []
+
+    try:
+        parsed = json.loads(normalized_raw)
+    except json.JSONDecodeError:
+        parsed = None
+
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+
+    return [part.strip() for part in normalized_raw.split(",") if part.strip()]
+
+
+def _normalize_search_queries(value: object) -> list[str]:
+    if isinstance(value, list):
+        raw_items = [str(item) for item in value]
+        non_empty_raw_items = [item for item in raw_items if item != ""]
+
+        # SQLite test runs can return ARRAY values as character arrays of a JSON string.
+        if non_empty_raw_items and all(len(item) == 1 for item in non_empty_raw_items):
+            parsed_items = _parse_search_queries_text("".join(non_empty_raw_items))
+            if parsed_items:
+                return parsed_items
+
+        return [item.strip() for item in raw_items if item.strip()]
+
+    if isinstance(value, str):
+        return _parse_search_queries_text(value)
+
+    return []
+
+
+def _to_topic_summary(topic: Topic, new_items_count: int) -> TopicSummary:
+    summary = TopicSummary.model_validate(topic)
+    summary.search_queries = _normalize_search_queries(topic.search_queries)
+    summary.new_items_count = new_items_count
+    return summary
+
+
 async def _get_topic_or_404(db: AsyncSession, topic_id: int) -> Topic:
     topic = await db.get(Topic, topic_id)
     if not topic:
@@ -115,9 +158,7 @@ async def list_topics(
 
     topics = []
     for topic, new_items_count in result:
-        summary = TopicSummary.model_validate(topic)
-        summary.new_items_count = new_items_count or 0
-        topics.append(summary)
+        topics.append(_to_topic_summary(topic, new_items_count or 0))
 
     return TopicListResponse(topics=topics)
 
@@ -129,6 +170,13 @@ async def create_topic(
 ):
     """Add a new topic to the watchlist."""
     slug = _slugify(payload.label)
+    if not slug:
+        raise HTTPException(status_code=400, detail="Topic label is invalid")
+
+    normalized_queries = [query.strip() for query in payload.search_queries if query.strip()]
+    if not normalized_queries:
+        raise HTTPException(status_code=400, detail="Topic search queries cannot be empty")
+
     existing_stmt = select(Topic).where(Topic.slug == slug)
 
     existing = await db.execute(existing_stmt)
@@ -137,17 +185,15 @@ async def create_topic(
 
     topic = Topic(
         slug=slug,
-        label=payload.label,
-        search_queries=payload.search_queries,
+        label=payload.label.strip(),
+        search_queries=normalized_queries,
         is_global=True,
     )
     db.add(topic)
     await db.commit()
     await db.refresh(topic)
 
-    summary = TopicSummary.model_validate(topic)
-    summary.new_items_count = 0
-    return summary
+    return _to_topic_summary(topic, 0)
 
 
 @router.get("/{topic_id}", response_model=TopicSummary)
@@ -163,9 +209,54 @@ async def get_topic(
     )
     new_items_count = count_result.scalar() or 0
 
-    summary = TopicSummary.model_validate(topic)
-    summary.new_items_count = new_items_count
-    return summary
+    return _to_topic_summary(topic, new_items_count)
+
+
+@router.patch("/{topic_id}", response_model=TopicSummary)
+async def update_topic(
+    topic_id: int,
+    payload: TopicUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing topic label and/or search queries."""
+    if payload.label is None and payload.search_queries is None:
+        raise HTTPException(status_code=400, detail="No topic fields provided for update")
+
+    topic = await _get_topic_or_404(db, topic_id)
+
+    if payload.label is not None:
+        normalized_label = payload.label.strip()
+        if not normalized_label:
+            raise HTTPException(status_code=400, detail="Topic label cannot be empty")
+
+        next_slug = _slugify(normalized_label)
+        if not next_slug:
+            raise HTTPException(status_code=400, detail="Topic label is invalid")
+
+        if next_slug != topic.slug:
+            existing_stmt = select(Topic).where(Topic.slug == next_slug, Topic.id != topic_id)
+            existing = await db.execute(existing_stmt)
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=409, detail=f"Topic with slug '{next_slug}' already exists")
+
+        topic.label = normalized_label
+        topic.slug = next_slug
+
+    if payload.search_queries is not None:
+        normalized_queries = [query.strip() for query in payload.search_queries if query.strip()]
+        if not normalized_queries:
+            raise HTTPException(status_code=400, detail="Topic search queries cannot be empty")
+        topic.search_queries = normalized_queries
+
+    await db.commit()
+    await db.refresh(topic)
+
+    count_result = await db.execute(
+        select(func.count(ActivityEvent.id)).where(ActivityEvent.topic_id == topic_id)
+    )
+    new_items_count = count_result.scalar() or 0
+
+    return _to_topic_summary(topic, new_items_count)
 
 
 @router.get("/{topic_id}/timeline", response_model=TimelineResponse)

@@ -45,6 +45,24 @@ export const api = {
       }),
     }),
 
+  updateTopic: (
+    topicId: number,
+    payload: { label?: string; searchQueries?: string[] }
+  ) => {
+    const body: { label?: string; search_queries?: string[] } = {};
+    if (payload.label !== undefined) {
+      body.label = payload.label;
+    }
+    if (payload.searchQueries !== undefined) {
+      body.search_queries = payload.searchQueries;
+    }
+
+    return fetchApi<TopicSummary>(`${BFF_URL}/topics/${topicId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
   deleteTopic: (topicId: number) =>
     fetchApi<void>(`${BFF_URL}/topics/${topicId}`, { method: "DELETE" }),
 
