@@ -42,13 +42,19 @@ class TestTopicSchemas:
             slug="ai-policy",
             label="AI Policy",
             search_queries=["ai"],
+            is_global=True,
             last_refreshed_at=None,
         )
         assert ts.new_items_count == 0
 
     def test_topic_list_response(self):
         ts = TopicSummary(
-            id=1, slug="test", label="Test", search_queries=["t"], last_refreshed_at=None
+            id=1,
+            slug="test",
+            label="Test",
+            search_queries=["t"],
+            is_global=True,
+            last_refreshed_at=None,
         )
         tlr = TopicListResponse(topics=[ts])
         assert len(tlr.topics) == 1

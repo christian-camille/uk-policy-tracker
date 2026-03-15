@@ -1,32 +1,28 @@
 "use client";
 
-import { useState } from "react";
 import { Plus } from "lucide-react";
+import { useState } from "react";
 import { TopicCard } from "@/components/TopicCard";
-import { useTopics, useCreateTopic } from "@/hooks/useTopics";
-import { useCurrentUser } from "@/hooks/useAuth";
+import { useCreateTopic, useTopics } from "@/hooks/useTopics";
 
 export default function WatchlistPage() {
-  const { data, isLoading, error } = useTopics("all");
-  const { data: userData, isLoading: authLoading } = useCurrentUser();
+  const { data, isLoading, error } = useTopics();
   const createMutation = useCreateTopic();
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
   const [queries, setQueries] = useState("");
-  const [topicScope, setTopicScope] = useState<"shared" | "private">("private");
 
   const topics = data?.topics ?? [];
-  const sharedTopics = topics.filter((topic) => topic.is_global);
-  const privateTopics = topics.filter((topic) => !topic.is_global);
-  const isAuthenticated = !!userData?.user;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!label.trim()) return;
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!label.trim()) {
+      return;
+    }
 
     const searchQueries = queries
       .split(",")
-      .map((q) => q.trim())
+      .map((query) => query.trim())
       .filter(Boolean);
 
     if (searchQueries.length === 0) {
@@ -37,172 +33,113 @@ export default function WatchlistPage() {
       {
         label: label.trim(),
         searchQueries,
-        isGlobal: topicScope === "shared",
       },
       {
         onSuccess: () => {
           setLabel("");
           setQueries("");
           setShowForm(false);
-          setTopicScope("private");
         },
       }
     );
   };
 
   return (
-    <main className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Policy Watchlist</h1>
-        <button
-          disabled={!isAuthenticated}
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          <Plus className="w-4 h-4" />
-          Add Topic
-        </button>
-      </div>
-
-      {!authLoading && !isAuthenticated && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-900">
-          Sign in to create and manage your private topics.
+    <main className="mx-auto max-w-5xl p-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+              Local Edition
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+              Policy Watchlist
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+              Track GOV.UK publications and parliamentary activity for the topics you care about, with everything stored locally in PostgreSQL.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowForm((current) => !current)}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+          >
+            <Plus className="h-4 w-4" />
+            {showForm ? "Close" : "Add Topic"}
+          </button>
         </div>
-      )}
 
-      {showForm && isAuthenticated && (
-        <form
-          onSubmit={handleSubmit}
-          className="mb-6 bg-white border border-gray-200 rounded-lg p-5"
-        >
-          <h2 className="text-base font-semibold text-gray-900 mb-4">
-            Add a topic to track
-          </h2>
-          <div className="space-y-4">
+        {showForm && (
+          <form onSubmit={handleSubmit} className="mt-6 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div>
-              <label
-                htmlFor="label"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
+              <label htmlFor="label" className="mb-1 block text-sm font-medium text-slate-700">
                 Topic name
               </label>
               <input
                 id="label"
                 type="text"
                 value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder='e.g. "Net Zero" or "Planning Reform"'
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                onChange={(event) => setLabel(event.target.value)}
+                placeholder='e.g. "Planning Reform"'
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-0 transition focus:border-blue-500"
                 required
               />
             </div>
             <div>
-              <label
-                htmlFor="scope"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Topic visibility
-              </label>
-              <select
-                id="scope"
-                value={topicScope}
-                onChange={(e) =>
-                  setTopicScope(e.target.value as "shared" | "private")
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-              >
-                <option value="private">Private (only me)</option>
-                <option value="shared">Shared (all users)</option>
-              </select>
-            </div>
-            <div>
-              <label
-                htmlFor="queries"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Search queries{" "}
-                <span className="text-gray-400 font-normal">
-                  (comma-separated, defaults to topic name)
-                </span>
+              <label htmlFor="queries" className="mb-1 block text-sm font-medium text-slate-700">
+                Search queries
+                <span className="ml-1 font-normal text-slate-400">(comma-separated, defaults to topic name)</span>
               </label>
               <input
                 id="queries"
                 type="text"
                 value={queries}
-                onChange={(e) => setQueries(e.target.value)}
-                placeholder='e.g. "net zero, carbon neutral, decarbonisation"'
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                onChange={(event) => setQueries(event.target.value)}
+                placeholder='e.g. "planning reform, local government"'
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-0 transition focus:border-blue-500"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
               <button
                 type="submit"
                 disabled={createMutation.isPending}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 {createMutation.isPending ? "Creating..." : "Create Topic"}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
+              {createMutation.isError && (
+                <p className="text-sm text-red-700">Failed to create topic.</p>
+              )}
             </div>
+          </form>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Tracked Topics</h2>
+          <p className="text-sm text-slate-500">{topics.length} total</p>
+        </div>
+
+        {isLoading && <div className="py-12 text-center text-slate-500">Loading topics...</div>}
+
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Failed to load topics. Is the API running?
           </div>
-        </form>
-      )}
+        )}
 
-      {isLoading && (
-        <div className="text-center py-12 text-gray-500">Loading topics...</div>
-      )}
+        {!isLoading && !error && topics.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
+            No topics yet. Add one to start tracking policy activity.
+          </div>
+        )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
-          Failed to load topics. Is the API running?
+        <div className="space-y-4">
+          {topics.map((topic) => (
+            <TopicCard key={topic.id} topic={topic} />
+          ))}
         </div>
-      )}
-
-      {data && data.topics.length === 0 && !showForm && (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg mb-2">No topics yet</p>
-          <p className="text-sm">
-            Click &quot;Add Topic&quot; to start tracking UK government policy
-            activity.
-          </p>
-        </div>
-      )}
-
-      {data && data.topics.length > 0 && (
-        <div className="space-y-8">
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">My Private Topics</h2>
-            {privateTopics.length === 0 ? (
-              <p className="text-sm text-gray-500">No private topics yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {privateTopics.map((topic) => (
-                  <TopicCard key={topic.id} topic={topic} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Shared Topics</h2>
-            {sharedTopics.length === 0 ? (
-              <p className="text-sm text-gray-500">No shared topics yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {sharedTopics.map((topic) => (
-                  <TopicCard key={topic.id} topic={topic} />
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
+      </section>
     </main>
   );
 }

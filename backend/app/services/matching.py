@@ -22,7 +22,7 @@ class MatchingService:
     """
     Resolves NLP-extracted entities from GOV.UK content against
     Parliament entity tables in the silver layer.
-    Uses synchronous Sessions (for Celery worker context).
+    Uses synchronous sessions for local refresh execution.
     """
 
     def __init__(self, db: Session, extractor: EntityExtractor):

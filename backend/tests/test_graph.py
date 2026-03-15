@@ -95,7 +95,7 @@ class TestGraphService:
         assert detail.connections[0].direction == "incoming"
 
 
-# ── GraphProjectionBuilder (sync, for Celery) ────────────────────────
+# ── GraphProjectionBuilder (sync, for local refresh) ─────────────────
 
 
 class TestGraphProjectionBuilder:

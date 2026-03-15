@@ -1,4 +1,4 @@
-"""Tests for Celery task orchestration and individual tasks."""
+"""Tests for local refresh orchestration and ingest helper functions."""
 
 from __future__ import annotations
 
@@ -59,6 +59,50 @@ class TestIngestTasks:
 
         assert result["topic_id"] == 1
         assert result["items_ingested"] == 1
+
+    @patch("app.tasks.ingest.get_sync_session")
+    @patch("app.tasks.ingest.GovUkClientSync")
+    def test_ingest_govuk_continues_after_one_item_fails(
+        self, mock_client_cls, mock_session_ctx
+    ):
+        from app.tasks.ingest import ingest_govuk_for_topic
+
+        mock_topic = MagicMock()
+        mock_topic.id = 1
+        mock_topic.slug = "test"
+        mock_topic.search_queries = ["test"]
+        mock_topic.is_global = True
+
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_topic
+        mock_session_ctx.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_session_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_http = MagicMock()
+        mock_client = MagicMock()
+        mock_client.discover_for_topic.return_value = [
+            {"_id": "/doc/1", "link": "/doc/1", "title": "Doc 1"},
+            {"_id": "/doc/2", "link": "/doc/2", "title": "Doc 2"},
+        ]
+        mock_client_cls.return_value = mock_client
+
+        with patch("app.tasks.ingest.httpx") as mock_httpx:
+            mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_http)
+            mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+            with patch("app.tasks.ingest.IngestService") as mock_ingest_cls:
+                mock_ingest = MagicMock()
+                mock_ingest.upsert_govuk_content.side_effect = [
+                    RuntimeError("bad row"),
+                    None,
+                ]
+                mock_ingest_cls.return_value = mock_ingest
+
+                result = ingest_govuk_for_topic(topic_id=1)
+
+        assert result == {"topic_id": 1, "items_ingested": 1}
+        assert mock_ingest.upsert_govuk_content.call_count == 2
+        assert mock_session.begin_nested.call_count == 2
+        mock_session.commit.assert_called_once()
 
     @patch("app.tasks.ingest.get_sync_session")
     @patch("app.tasks.ingest.GovUkClientSync")
@@ -149,76 +193,37 @@ class TestIngestTasks:
 
 
 class TestPipelineTasks:
-    """Test pipeline orchestration tasks."""
+    """Test local refresh orchestration wrappers."""
 
-    @patch("app.tasks.pipeline.rebuild_graph_projection")
-    @patch("app.tasks.pipeline.run_entity_matching")
-    @patch("app.tasks.pipeline.create_activity_events")
-    @patch("app.tasks.pipeline.ingest_parliament_for_topic")
-    @patch("app.tasks.pipeline.ingest_govuk_for_topic")
-    def test_refresh_single_topic_builds_pipeline(
-        self, mock_govuk, mock_parl, mock_events, mock_match, mock_graph
-    ):
+    @patch("app.tasks.pipeline.run_topic_refresh")
+    def test_refresh_single_topic_runs_service(self, mock_run_topic_refresh):
         from app.tasks.pipeline import refresh_single_topic
 
-        # Mock the Celery primitives
-        mock_govuk.si = MagicMock()
-        mock_parl.si = MagicMock()
-        mock_events.si = MagicMock()
-        mock_match.si = MagicMock()
-        mock_graph.si = MagicMock()
+        mock_run_topic_refresh.return_value = {"events": {"events_created": 3}}
 
         result = refresh_single_topic(topic_id=1)
-        assert result["status"] == "pipeline_started"
+        assert result["status"] == "completed"
         assert result["topic_id"] == 1
-        mock_govuk.si.assert_called_once_with(1, True)
-        mock_parl.si.assert_called_once_with(1, True)
+        assert result["result"]["events"]["events_created"] == 3
+        mock_run_topic_refresh.assert_called_once_with(1)
 
-    @patch("app.tasks.pipeline.get_sync_session")
-    @patch("app.tasks.pipeline.rebuild_graph_projection")
-    @patch("app.tasks.pipeline.run_entity_matching")
-    @patch("app.tasks.pipeline.create_activity_events")
-    @patch("app.tasks.pipeline.ingest_parliament_for_topic")
-    @patch("app.tasks.pipeline.ingest_govuk_for_topic")
-    def test_daily_refresh_no_topics(
-        self, mock_govuk, mock_parl, mock_events, mock_match, mock_graph, mock_session_ctx
-    ):
+    @patch("app.tasks.pipeline.run_all_topic_refreshes")
+    def test_daily_refresh_no_topics(self, mock_run_all):
         from app.tasks.pipeline import daily_refresh_all_topics
 
-        mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.all.return_value = []
-        mock_session_ctx.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.return_value.__exit__ = MagicMock(return_value=False)
+        mock_run_all.return_value = {"status": "no_topics", "topics": 0, "results": []}
 
         result = daily_refresh_all_topics()
-        assert result == {"status": "no_topics"}
+        assert result == {"status": "no_topics", "topics": 0, "results": []}
+        mock_run_all.assert_called_once_with()
 
-    @patch("app.tasks.pipeline.get_sync_session")
-    @patch("app.tasks.pipeline.rebuild_graph_projection")
-    @patch("app.tasks.pipeline.run_entity_matching")
-    @patch("app.tasks.pipeline.create_activity_events")
-    @patch("app.tasks.pipeline.ingest_parliament_for_topic")
-    @patch("app.tasks.pipeline.ingest_govuk_for_topic")
-    def test_daily_refresh_uses_shared_topics_only(
-        self, mock_govuk, mock_parl, mock_events, mock_match, mock_graph, mock_session_ctx
-    ):
+    @patch("app.tasks.pipeline.run_all_topic_refreshes")
+    def test_daily_refresh_returns_completed_result(self, mock_run_all):
         from app.tasks.pipeline import daily_refresh_all_topics
 
-        mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.all.return_value = [(1,), (2,)]
-        mock_session_ctx.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.return_value.__exit__ = MagicMock(return_value=False)
-
-        mock_govuk.si = MagicMock()
-        mock_parl.si = MagicMock()
-        mock_events.si = MagicMock()
-        mock_match.si = MagicMock()
-        mock_graph.si = MagicMock()
+        mock_run_all.return_value = {"status": "completed", "topics": 2, "results": []}
 
         result = daily_refresh_all_topics()
 
-        assert result == {"status": "pipeline_started", "topics": 2}
-        mock_govuk.si.assert_any_call(1, False)
-        mock_govuk.si.assert_any_call(2, False)
-        mock_parl.si.assert_any_call(1, False)
-        mock_parl.si.assert_any_call(2, False)
+        assert result == {"status": "completed", "topics": 2, "results": []}
+        mock_run_all.assert_called_once_with()

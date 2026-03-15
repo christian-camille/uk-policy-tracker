@@ -6,11 +6,10 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[dev]" && \
-    python -m spacy download en_core_web_sm
-
 COPY . .
+
+RUN pip install --no-cache-dir -e . && \
+    python -m spacy download en_core_web_sm
 
 EXPOSE 8000
 

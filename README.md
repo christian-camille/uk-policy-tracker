@@ -1,237 +1,210 @@
 # GOV Tracker
 
-A full-stack application that tracks UK government policy topics by linking **GOV.UK publications** to **parliamentary activity** — surfacing changes, timelines, and key stakeholders in one place.
+GOV Tracker links GOV.UK publications to parliamentary activity so you can follow a policy topic in one place.
 
-## What It Does
+The app lets you:
 
-GOV Tracker lets you create **topic watchlists** (e.g. "AI Regulation", "Energy Policy") and automatically:
+- Create and manage tracked topics
+- Refresh data on demand from GOV.UK and Parliament APIs
+- Browse a topic timeline of activity events
+- Inspect key actors and connected entities
+- Store ingested data in PostgreSQL
 
-- **Ingests GOV.UK content** — policy papers, consultations, guidance, and news stories matching your topics
-- **Pulls parliamentary data** — bills, written questions, divisions (votes), and MP/Lord profiles from the UK Parliament APIs
-- **Extracts entities** — uses spaCy NLP to identify people, organisations, and legislation mentioned in documents
-- **Builds a knowledge graph** — connects content items to topics, organisations, people, and bills through a relational graph projection
-- **Presents unified timelines** — shows all activity for a topic in chronological order, colour-coded by event type
-- **Surfaces key actors** — ranks the people most connected to each topic
+## Stack
 
-### Use Cases
+The repository contains three runtime services and one optional utility service:
 
-- **Policy researchers** tracking legislative progress across multiple topics
-- **Journalists** monitoring government activity and identifying key stakeholders
-- **Advocacy organisations** keeping up with relevant publications and parliamentary questions
-- **Civil servants** maintaining awareness of cross-departmental policy developments
+- `postgres`: PostgreSQL 16 database
+- `api`: FastAPI application and migration runner
+- `frontend`: Next.js application
+- `migrate`: optional one-off Alembic migration service
 
-## Architecture
+Topic refresh is synchronous. When you click `Refresh Data`, the API process runs discovery, ingest, event creation, entity matching, and graph rebuild directly.
 
-<img src="docs/images/architecture.svg" alt="Project's architecture">
+## Requirements
 
-### Data Pipeline (Bronze → Silver → Gold)
+For the default Docker workflow:
 
-| Layer | Purpose | Contents |
-|-------|---------|----------|
-| **Bronze** | Raw API responses | JSON blobs from GOV.UK and Parliament APIs |
-| **Silver** | Normalised entities | Topics, ContentItems, Persons, Bills, Questions, Divisions, Organisations, ActivityEvents |
-| **Gold** | Knowledge graph | GraphNodes and GraphEdges linking all entities |
+- Docker Desktop or Docker Engine with `docker compose`
 
-### Daily Pipeline
+For development without Docker:
 
-Celery Beat triggers a daily refresh at 06:00 UTC that runs:
+- Python 3.12+
+- Node.js 20+
+- PostgreSQL 16+
 
-1. **Ingest** — fetch new data from GOV.UK and Parliament APIs for all watchlist topics (parallel)
-2. **Events** — scan silver tables and create timeline ActivityEvent records
-3. **Match** — run spaCy NER to link content items to people, bills, and organisations
-4. **Graph** — rebuild the gold-layer graph projection from silver data
+## Quick Start
 
-On-demand refresh is also available per-topic via the API.
+1. Create the environment file.
 
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Alembic |
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, TanStack React Query |
-| Database | PostgreSQL 16 with `pg_trgm` for fuzzy matching |
-| Task Queue | Celery 5.4 with Redis broker |
-| NLP | spaCy 3.8 (`en_core_web_sm`) with custom EntityRuler patterns |
-| HTTP Client | httpx (async + sync) |
-| Deployment | Docker Compose |
-
-## Getting Started
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- (Optional) Python 3.12+ and Node.js 20+ for local development without Docker
-
-### Quick Start
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
-   cd gov-tracker
-   ```
-
-2. **Create your environment file**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   The defaults work out of the box with Docker Compose. Edit `.env` if you need to change database credentials or API URLs.
-
-3. **Start all services**
-
-   ```bash
-   docker compose up --build
-   ```
-
-   This starts PostgreSQL, Redis, the API server, Celery worker + beat scheduler, runs database migrations, and launches the frontend.
-
-4. **Open the app**
-
-   - Frontend: [http://localhost:3000](http://localhost:3000)
-   - API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-   - Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-
-5. **Create your first topic**
-
-   Click "Add Topic" on the home page, enter a label (e.g. "AI Regulation") and comma-separated search queries (e.g. "artificial intelligence, AI regulation, machine learning"). Hit save, then click the refresh button to trigger the first data ingestion.
-
-### Local Development (without Docker)
-
-**Backend:**
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -e ".[dev]"
-python -m spacy download en_core_web_sm
-
-# Start the API server
-uvicorn app.main:app --reload --port 8000
-
-# Start the Celery worker (separate terminal)
-celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
-
-# Start the Celery beat scheduler (separate terminal)
-celery -A app.tasks.celery_app beat --loglevel=info
+```powershell
+Copy-Item .env.example .env
 ```
 
-Requires PostgreSQL and Redis running locally. Update `DATABASE_URL`, `DATABASE_URL_SYNC`, and `REDIS_URL` in your `.env` accordingly.
+2. Build and start the stack.
 
-**Frontend:**
+```powershell
+docker compose up --build
+```
 
-```bash
+3. Open the application.
+
+- App: http://localhost:3000
+- API docs: http://localhost:8000/docs
+- Health endpoint: http://localhost:8000/api/health
+
+4. Add a topic from the home page.
+
+5. Open the topic and click `Refresh Data` to fetch the latest GOV.UK and Parliament activity.
+
+## How Startup Works
+
+- `postgres` starts first and exposes the database on port `5432`
+- `api` waits for Postgres, runs `alembic upgrade head`, then starts Uvicorn on port `8000`
+- `frontend` waits for a healthy API, then starts Next.js on port `3000`
+
+Database migrations are applied automatically on API startup, including upgrades for existing database volumes.
+
+## Common Commands
+
+Start in the background:
+
+```powershell
+docker compose up --build -d
+```
+
+Stop the stack:
+
+```powershell
+docker compose down
+```
+
+Stop the stack and delete database data:
+
+```powershell
+docker compose down -v
+```
+
+Run migrations manually:
+
+```powershell
+docker compose run --rm migrate
+```
+
+Rebuild just one service:
+
+```powershell
+docker compose build api
+docker compose build frontend
+```
+
+View logs:
+
+```powershell
+docker compose logs -f api
+docker compose logs -f frontend
+docker compose logs -f postgres
+```
+
+## Environment
+
+The defaults in [.env.example](.env.example) are suitable for the Docker setup in this repository.
+
+Important variables:
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+- `DATABASE_URL_SYNC`
+- `CORS_ALLOWED_ORIGINS`
+- `API_PROXY_TARGET`
+- `SPACY_MODEL`
+
+External API base URLs are configurable too:
+
+- `GOVUK_BASE_URL`
+- `PARLIAMENT_MEMBERS_API_URL`
+- `PARLIAMENT_BILLS_API_URL`
+- `PARLIAMENT_QUESTIONS_API_URL`
+- `PARLIAMENT_DIVISIONS_API_URL`
+
+## Development Without Docker
+
+You will need PostgreSQL running separately and a populated `.env` file.
+
+Backend setup:
+
+```powershell
+cd backend
+pip install -e ".[dev]"
+python -m spacy download en_core_web_sm
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+```
+
+Frontend setup:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-The frontend proxies `/api/*` requests to the backend via Next.js rewrites (configured in `next.config.js`).
+## Project Layout
 
-## API Reference
+- [backend](backend): FastAPI app, Alembic migrations, models, services, tests
+- [frontend](frontend): Next.js app, BFF proxy route, topic and entity pages
+- [docker-compose.yml](docker-compose.yml): container orchestration
+- [.env.example](.env.example): default environment configuration
+- [Project Specification.md](Project%20Specification.md): product and data-model notes
 
-All endpoints are prefixed with `/api`.
+## Data Model Notes
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Service health check (DB, Redis, data freshness) |
-| `GET` | `/topics` | List all watchlist topics |
-| `POST` | `/topics` | Create a new topic |
-| `GET` | `/topics/{id}` | Get a single topic |
-| `DELETE` | `/topics/{id}` | Delete a topic |
-| `GET` | `/topics/{id}/timeline` | Paginated activity timeline (supports `?since=` and `?limit=`) |
-| `POST` | `/topics/{id}/refresh` | Trigger on-demand data refresh (returns 202) |
-| `GET` | `/topics/{id}/actors` | Key people connected to this topic |
-| `GET` | `/entities/{node_id}` | Entity detail with graph connections |
+The backend uses a layered schema approach:
 
-Interactive API documentation is available at `/docs` (Swagger UI) when the backend is running.
+- `bronze`: raw source payloads
+- `silver`: normalized relational entities
+- `gold`: graph projection nodes and edges
 
-## Data Sources
+Tracked topics are global within the running instance. There is no account or ownership layer.
 
-| Source | API | Data |
-|--------|-----|------|
-| [GOV.UK](https://www.gov.uk) | Search API, Content API | Policy papers, consultations, guidance, news stories, organisations |
-| [UK Parliament](https://parliament.uk) | Members API | MP and Lord profiles, party, constituency |
-| | Bills API | Bill progress, stages, titles |
-| | Written Questions API | Questions tabled by members, answers |
-| | Commons Votes API | Division results, aye/no counts |
+## Testing
 
-## Running Tests
+Backend tests:
 
-```bash
+```powershell
 cd backend
-pip install -e ".[dev]"
-python -m pytest tests/ -v
+pytest -q
 ```
 
-The test suite uses **SQLite in-memory** databases with PostgreSQL type adapters, so no external services are needed. Tests cover:
+Frontend production build:
 
-- **API endpoints** — full CRUD for topics, timeline queries, health checks
-- **API clients** — GOV.UK and Parliament client request/response handling with mocked HTTP
-- **Ingestion service** — bronze/silver upserts, idempotency, organisation extraction, activity events
-- **Graph service** — async entity detail queries and sync graph projection builder
-- **Celery tasks** — task orchestration with mocked dependencies
-- **Schemas** — Pydantic model validation, slug generation
-- **NLP extractor** — entity extraction, deduplication, custom patterns (requires Python ≤3.13 / runs in Docker)
-
-## Project Structure
-
-```
-gov-tracker/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI application factory
-│   │   ├── config.py            # Pydantic settings
-│   │   ├── database.py          # SQLAlchemy engines (async + sync)
-│   │   ├── models/
-│   │   │   ├── bronze.py        # Raw API response storage
-│   │   │   ├── silver.py        # Normalised entity models
-│   │   │   └── gold.py          # Graph node/edge models
-│   │   ├── routers/
-│   │   │   ├── health.py        # Health check endpoint
-│   │   │   ├── topics.py        # Topic CRUD + timeline + refresh
-│   │   │   └── entities.py      # Entity detail endpoint
-│   │   ├── schemas/             # Pydantic request/response schemas
-│   │   ├── services/
-│   │   │   ├── govuk.py         # GOV.UK API client (async + sync)
-│   │   │   ├── parliament.py    # Parliament API client (async + sync)
-│   │   │   ├── ingest.py        # Data ingestion and upsert logic
-│   │   │   ├── matching.py      # NLP entity matching and resolution
-│   │   │   └── graph.py         # Graph queries and projection builder
-│   │   ├── nlp/
-│   │   │   └── extractor.py     # spaCy NER wrapper with EntityRuler
-│   │   └── tasks/
-│   │       ├── celery_app.py    # Celery configuration and beat schedule
-│   │       ├── ingest.py        # Individual Celery tasks
-│   │       └── pipeline.py      # Task orchestration (chains + groups)
-│   ├── alembic/                 # Database migrations
-│   ├── tests/                   # Test suite
-│   ├── Dockerfile
-│   └── pyproject.toml
-├── frontend/
-│   ├── src/
-│   │   ├── app/                 # Next.js pages (App Router)
-│   │   ├── components/          # React components
-│   │   ├── hooks/               # React Query hooks
-│   │   └── lib/                 # API client and types
-│   ├── Dockerfile
-│   └── package.json
-├── docker-compose.yml
-├── .env.example
-└── .gitignore
+```powershell
+cd frontend
+npm run build
 ```
 
-## Environment Variables
+## Troubleshooting
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_DB` | `govtracker` | PostgreSQL database name |
-| `POSTGRES_USER` | `govtracker` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | `govtracker` | PostgreSQL password |
-| `DATABASE_URL` | `postgresql+asyncpg://...` | Async database connection string |
-| `DATABASE_URL_SYNC` | `postgresql+psycopg2://...` | Sync database connection string (Celery) |
-| `REDIS_URL` | `redis://redis:6379/0` | Redis connection string |
-| `SPACY_MODEL` | `en_core_web_sm` | spaCy model for NER |
-| `API_PROXY_TARGET` | `http://localhost:8000` | Backend URL for frontend proxy |
+If the first build feels slow:
+
+- The backend image downloads the spaCy `en_core_web_sm` model during the build.
+
+If the frontend starts but the API is unavailable:
+
+- Check `docker compose logs api`
+- Confirm the API health endpoint responds at http://localhost:8000/api/health
+
+If you want a completely clean database:
+
+```powershell
+docker compose down -v
+docker compose up --build
+```
+
+If ports are already in use:
+
+- `5432` is used by PostgreSQL
+- `8000` is used by the API
+- `3000` is used by the frontend

@@ -105,6 +105,21 @@ class TestGovUkClient:
 
         assert results == []
 
+    @respx.mock
+    async def test_discover_handles_transport_error(self):
+        respx.get("https://www.gov.uk/api/search.json").mock(
+            side_effect=httpx.ReadTimeout("timed out")
+        )
+        topic = MagicMock()
+        topic.slug = "test"
+        topic.search_queries = ["test query"]
+
+        async with httpx.AsyncClient() as http:
+            client = GovUkClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert results == []
+
 
 # ── GOV.UK Client (sync) ─────────────────────────────────────────────
 
@@ -134,6 +149,21 @@ class TestGovUkClientSync:
             result = client.get_content("/government/doc")
 
         assert result["title"] == "Energy"
+
+    @respx.mock
+    def test_discover_handles_transport_error(self):
+        respx.get("https://www.gov.uk/api/search.json").mock(
+            side_effect=httpx.ReadTimeout("timed out")
+        )
+        topic = MagicMock()
+        topic.slug = "test"
+        topic.search_queries = ["test query"]
+
+        with httpx.Client() as http:
+            client = GovUkClientSync(http)
+            results = client.discover_for_topic(topic)
+
+        assert results == []
 
 
 # ── Parliament Client (async) ────────────────────────────────────────
@@ -281,6 +311,37 @@ class TestParliamentClient:
         # Bill with billId=10 should appear only once despite two queries
         assert len(results["bills"]) == 1
 
+    @respx.mock
+    async def test_discover_continues_after_transport_error(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(
+                200,
+                json={"items": [{"billId": 10, "shortTitle": "Bill A"}]},
+            )
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(side_effect=httpx.ReadTimeout("timed out"))
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(
+            return_value=httpx.Response(
+                200, json=[{"DivisionId": 30, "Title": "Div A"}]
+            )
+        )
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert len(results["bills"]) == 1
+        assert results["questions"] == []
+        assert len(results["divisions"]) == 1
+
 
 # ── Parliament Client (sync) ─────────────────────────────────────────
 
@@ -299,3 +360,29 @@ class TestParliamentClientSync:
             result = client.search_bills("test")
 
         assert len(result["items"]) == 1
+
+    @respx.mock
+    def test_discover_continues_after_transport_error(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(
+                200,
+                json={"items": [{"billId": 1, "shortTitle": "Bill A"}]},
+            )
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(side_effect=httpx.ReadTimeout("timed out"))
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(return_value=httpx.Response(200, json=[]))
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        with httpx.Client() as http:
+            client = ParliamentClientSync(http)
+            results = client.discover_for_topic(topic)
+
+        assert len(results["bills"]) == 1
+        assert results["questions"] == []

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
 export const dynamic = "force-dynamic";
 
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:8000";
@@ -13,7 +11,7 @@ function buildProxyUrl(request: NextRequest, path: string[]): URL {
   return target;
 }
 
-function buildForwardHeaders(request: NextRequest, accessToken: string): Headers {
+function buildForwardHeaders(request: NextRequest): Headers {
   const headers = new Headers();
 
   FORWARDED_HEADERS.forEach((name) => {
@@ -23,7 +21,6 @@ function buildForwardHeaders(request: NextRequest, accessToken: string): Headers
     }
   });
 
-  headers.set("Authorization", `Bearer ${accessToken}`);
   return headers;
 }
 
@@ -31,28 +28,25 @@ async function proxyRequest(
   request: NextRequest,
   context: { params: { path: string[] } }
 ): Promise<NextResponse> {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error || !session?.access_token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const target = buildProxyUrl(request, context.params.path);
-  const headers = buildForwardHeaders(request, session.access_token);
-
+  const headers = buildForwardHeaders(request);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
 
-  const upstream = await fetch(target, {
-    method: request.method,
-    headers,
-    body,
-    cache: "no-store",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers,
+      body,
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "API unavailable" },
+      { status: 503 }
+    );
+  }
 
   const responseHeaders = new Headers();
   const contentType = upstream.headers.get("content-type");

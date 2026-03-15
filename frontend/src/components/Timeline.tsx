@@ -1,20 +1,11 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import {
-  FileText,
-  Gavel,
-  HelpCircle,
-  CheckCircle,
-  Vote,
-} from "lucide-react";
+import { CheckCircle, FileText, Gavel, HelpCircle, Vote } from "lucide-react";
 import Link from "next/link";
 import { TimelineEvent } from "@/lib/types";
 
-const EVENT_CONFIG: Record<
-  string,
-  { color: string; icon: React.ElementType; label: string }
-> = {
+const EVENT_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
   govuk_publication: {
     color: "bg-blue-100 text-blue-800",
     icon: FileText,
@@ -45,7 +36,7 @@ const EVENT_CONFIG: Record<
 export function Timeline({ events }: { events: TimelineEvent[] }) {
   if (events.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
+      <div className="py-12 text-center text-slate-500">
         No activity events yet. Try refreshing the topic data.
       </div>
     );
@@ -55,7 +46,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
     <div className="space-y-3">
       {events.map((event) => {
         const config = EVENT_CONFIG[event.event_type] ?? {
-          color: "bg-gray-100 text-gray-800",
+          color: "bg-slate-100 text-slate-800",
           icon: FileText,
           label: event.event_type,
         };
@@ -64,26 +55,24 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
         return (
           <div
             key={event.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 flex gap-4"
+            className="flex gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
           >
-            <div className="shrink-0 mt-0.5">
-              <Icon className="w-5 h-5 text-gray-400" />
+            <div className="mt-0.5 shrink-0">
+              <Icon className="h-5 w-5 text-slate-400" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.color}`}
-                >
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.color}`}>
                   {config.label}
                 </span>
-                <time className="text-xs text-gray-400">
+                <time className="text-xs text-slate-400">
                   {formatDistanceToNow(new Date(event.event_date), {
                     addSuffix: true,
                   })}
                 </time>
               </div>
 
-              <h3 className="font-medium text-gray-900 text-sm">
+              <h3 className="text-sm font-medium text-slate-900">
                 {event.source_url ? (
                   <a
                     href={event.source_url}
@@ -99,14 +88,15 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
               </h3>
 
               {event.summary && (
-                <p className="mt-1 text-sm text-gray-500 line-clamp-2">
-                  {event.summary}
-                </p>
+                <p className="mt-1 line-clamp-2 text-sm text-slate-500">{event.summary}</p>
               )}
 
               <div className="mt-2">
                 <Link
-                  href={`/entities/${event.source_entity_id}`}
+                  href={{
+                    pathname: `/entities/${event.source_entity_id}`,
+                    query: { entityType: event.source_entity_type },
+                  }}
                   className="text-xs text-blue-600 hover:underline"
                 >
                   View entity details

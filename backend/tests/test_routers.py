@@ -1,19 +1,12 @@
-"""Tests for the API router endpoints (topics, health, entities)."""
+"""Tests for the local API router endpoints."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.gold import GraphEdge, GraphNode
-from app.models.silver import ActivityEvent, Topic
-
-
-# ── Health endpoint ──────────────────────────────────────────────────
+from app.models.gold import GraphNode
 
 
 @pytest.mark.asyncio
@@ -23,15 +16,7 @@ async def test_health_returns_ok(client):
     data = resp.json()
     assert data["db"] == "connected"
     assert "freshness" in data
-
-
-# ── Topics CRUD ──────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_topics_require_auth(unauthenticated_client):
-    resp = await unauthenticated_client.get("/api/topics")
-    assert resp.status_code == 401
+    assert "redis" not in data
 
 
 @pytest.mark.asyncio
@@ -44,6 +29,7 @@ async def test_create_topic(client):
     data = resp.json()
     assert data["label"] == "AI Policy"
     assert data["slug"] == "ai-policy"
+    assert data["is_global"] is True
     assert data["new_items_count"] == 0
 
 
@@ -61,27 +47,20 @@ async def test_create_topic_duplicate_slug_returns_409(client):
 
 
 @pytest.mark.asyncio
-async def test_create_private_topic_assigns_owner(client):
+async def test_create_topic_forces_global_scope(client):
     resp = await client.post(
         "/api/topics",
-        json={
-            "label": "Private AI",
-            "search_queries": ["private ai"],
-            "is_global": False,
-        },
+        json={"label": "Local Only", "search_queries": ["local"], "is_global": False},
     )
     assert resp.status_code == 201
-    data = resp.json()
-    assert data["is_global"] is False
-    assert data["owner_user_id"] is not None
+    assert resp.json()["is_global"] is True
 
 
 @pytest.mark.asyncio
 async def test_list_topics_empty(client):
     resp = await client.get("/api/topics")
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["topics"] == []
+    assert resp.json()["topics"] == []
 
 
 @pytest.mark.asyncio
@@ -97,47 +76,19 @@ async def test_list_topics_with_items(client):
     resp = await client.get("/api/topics")
     data = resp.json()
     assert len(data["topics"]) == 2
-    labels = {t["label"] for t in data["topics"]}
-    assert "Energy" in labels
-    assert "Health" in labels
+    labels = {topic["label"] for topic in data["topics"]}
+    assert labels == {"Energy", "Health"}
 
 
 @pytest.mark.asyncio
-async def test_list_topics_scope_filters_by_user(client, set_auth_user):
-    set_auth_user("user-1", "user1@example.com")
+async def test_private_scope_returns_empty(client):
     await client.post(
         "/api/topics",
-        json={"label": "Shared One", "search_queries": ["shared"], "is_global": True},
+        json={"label": "Shared One", "search_queries": ["shared"]},
     )
-    await client.post(
-        "/api/topics",
-        json={
-            "label": "User1 Private",
-            "search_queries": ["u1"],
-            "is_global": False,
-        },
-    )
-
-    set_auth_user("user-2", "user2@example.com")
-    await client.post(
-        "/api/topics",
-        json={
-            "label": "User2 Private",
-            "search_queries": ["u2"],
-            "is_global": False,
-        },
-    )
-
-    set_auth_user("user-1", "user1@example.com")
-    all_topics = (await client.get("/api/topics?scope=all")).json()["topics"]
-    all_labels = {topic["label"] for topic in all_topics}
-    assert "Shared One" in all_labels
-    assert "User1 Private" in all_labels
-    assert "User2 Private" not in all_labels
-
-    private_topics = (await client.get("/api/topics?scope=private")).json()["topics"]
-    private_labels = {topic["label"] for topic in private_topics}
-    assert private_labels == {"User1 Private"}
+    resp = await client.get("/api/topics?scope=private")
+    assert resp.status_code == 200
+    assert resp.json()["topics"] == []
 
 
 @pytest.mark.asyncio
@@ -160,32 +111,10 @@ async def test_get_topic_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_private_topic_forbidden_to_other_user(client, set_auth_user):
-    set_auth_user("owner-user", "owner@example.com")
-    create_resp = await client.post(
-        "/api/topics",
-        json={
-            "label": "Owner Private",
-            "search_queries": ["owner-only"],
-            "is_global": False,
-        },
-    )
-    topic_id = create_resp.json()["id"]
-
-    set_auth_user("other-user", "other@example.com")
-    resp = await client.get(f"/api/topics/{topic_id}")
-    assert resp.status_code == 403
-
-
-@pytest.mark.asyncio
 async def test_delete_topic(client):
     create_resp = await client.post(
         "/api/topics",
-        json={
-            "label": "To Delete",
-            "search_queries": ["delete"],
-            "is_global": False,
-        },
+        json={"label": "To Delete", "search_queries": ["delete"]},
     )
     topic_id = create_resp.json()["id"]
 
@@ -200,21 +129,6 @@ async def test_delete_topic(client):
 async def test_delete_topic_not_found(client):
     resp = await client.delete("/api/topics/9999")
     assert resp.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_delete_shared_topic_forbidden(client):
-    create_resp = await client.post(
-        "/api/topics",
-        json={"label": "Shared Topic", "search_queries": ["shared"], "is_global": True},
-    )
-    topic_id = create_resp.json()["id"]
-
-    resp = await client.delete(f"/api/topics/{topic_id}")
-    assert resp.status_code == 403
-
-
-# ── Timeline ─────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -240,39 +154,48 @@ async def test_timeline_not_found(client):
     assert resp.status_code == 404
 
 
-# ── Refresh ──────────────────────────────────────────────────────────
-
-
 @pytest.mark.asyncio
-async def test_refresh_topic_returns_202(client):
+async def test_refresh_topic_runs_direct_service(client):
     create_resp = await client.post(
         "/api/topics",
         json={"label": "Trade", "search_queries": ["trade"]},
     )
     topic_id = create_resp.json()["id"]
 
-    # refresh_single_topic is imported inside the function body,
-    # so we patch it at the pipeline module level
-    with patch("app.tasks.pipeline.refresh_single_topic") as mock_task:
-        mock_task.delay = MagicMock()
+    with patch(
+        "app.routers.topics.run_topic_refresh",
+        return_value={"events": {"events_created": 2}},
+    ) as refresh_mock:
         resp = await client.post(f"/api/topics/{topic_id}/refresh")
-        assert resp.status_code == 202
-        data = resp.json()
-        assert data["status"] == "queued"
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "completed"
+    assert data["topic_id"] == topic_id
+    refresh_mock.assert_called_once_with(topic_id)
 
 
 @pytest.mark.asyncio
 async def test_refresh_topic_not_found(client):
-    with patch("app.tasks.pipeline.refresh_single_topic") as mock_task:
-        mock_task.delay = MagicMock()
-        resp = await client.post("/api/topics/9999/refresh")
-        assert resp.status_code == 404
-
-
-# ── Entity detail ────────────────────────────────────────────────────
+    resp = await client.post("/api/topics/9999/refresh")
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_entity_not_found(client):
     resp = await client.get("/api/entities/9999")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_entity_lookup_by_source(client, async_session):
+    node = GraphNode(entity_type="content_item", entity_id=112, label="Test Content")
+    async_session.add(node)
+    await async_session.commit()
+
+    resp = await client.get("/api/entities/by-source/content_item/112")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["node"]["id"] == node.id
+    assert data["node"]["entity_type"] == "content_item"

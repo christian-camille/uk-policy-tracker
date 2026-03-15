@@ -4,7 +4,6 @@ export interface TopicSummary {
   label: string;
   search_queries: string[];
   is_global: boolean;
-  owner_user_id: number | null;
   last_refreshed_at: string | null;
   new_items_count: number;
 }
@@ -63,4 +62,49 @@ export interface GraphEdge {
 export interface EntityDetail {
   node: GraphNode;
   connections: GraphEdge[];
+}
+
+export interface RefreshGovUkResult {
+  topic_id: number;
+  items_ingested?: number;
+  status?: string;
+  error?: string;
+}
+
+export interface RefreshParliamentResult {
+  topic_id: number;
+  bills?: number;
+  questions?: number;
+  divisions?: number;
+  status?: string;
+  error?: string;
+}
+
+export interface RefreshEventsResult {
+  topic_id: number;
+  events_created: number;
+}
+
+export interface RefreshMentionsResult {
+  topic_id: number;
+  mentions_created: number;
+}
+
+export interface RefreshGraphResult {
+  nodes: number;
+  edges: number;
+}
+
+export interface RefreshSummary {
+  govuk: RefreshGovUkResult;
+  parliament: RefreshParliamentResult;
+  events: RefreshEventsResult;
+  mentions: RefreshMentionsResult;
+  graph: RefreshGraphResult;
+}
+
+export interface RefreshTopicResponse {
+  status: string;
+  topic_id: number;
+  result: RefreshSummary;
 }

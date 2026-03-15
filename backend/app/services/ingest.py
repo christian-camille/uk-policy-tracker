@@ -42,7 +42,7 @@ def _parse_date(value: str | None):
 class IngestService:
     """
     Transforms raw API responses into bronze and silver layer tables.
-    Uses synchronous Sessions (for Celery worker context).
+    Uses synchronous sessions for local refresh execution.
     """
 
     def __init__(self, db: Session):

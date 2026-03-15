@@ -1,7 +1,12 @@
-import { TopicSummary, TimelineResponse, EntityDetail, Actor } from "./types";
+import {
+  Actor,
+  EntityDetail,
+  RefreshTopicResponse,
+  TimelineResponse,
+  TopicSummary,
+} from "./types";
 
 const BFF_URL = "/api/bff";
-const AUTH_URL = "/api/auth";
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -30,13 +35,12 @@ export const api = {
     );
   },
 
-  createTopic: (label: string, searchQueries: string[], isGlobal: boolean) =>
+  createTopic: (label: string, searchQueries: string[]) =>
     fetchApi<TopicSummary>(`${BFF_URL}/topics`, {
       method: "POST",
       body: JSON.stringify({
         label,
         search_queries: searchQueries,
-        is_global: isGlobal,
       }),
     }),
 
@@ -59,43 +63,16 @@ export const api = {
 
   getEntity: (nodeId: number) => fetchApi<EntityDetail>(`${BFF_URL}/entities/${nodeId}`),
 
+  getEntityBySource: (entityType: string, entityId: number) =>
+    fetchApi<EntityDetail>(
+      `${BFF_URL}/entities/by-source/${encodeURIComponent(entityType)}/${entityId}`
+    ),
+
   getActors: (topicId: number) =>
     fetchApi<Actor[]>(`${BFF_URL}/topics/${topicId}/actors`),
 
   refreshTopic: (topicId: number) =>
-    fetchApi<{ status: string }>(`${BFF_URL}/topics/${topicId}/refresh`, {
+    fetchApi<RefreshTopicResponse>(`${BFF_URL}/topics/${topicId}/refresh`, {
       method: "POST",
-    }),
-
-  getCurrentUser: async () => {
-    const res = await fetch(`${AUTH_URL}/me`, { credentials: "include" });
-    if (res.status === 401) {
-      return { user: null };
-    }
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status} ${res.statusText}`);
-    }
-    return res.json() as Promise<{ user: { id: string; email: string | null } | null }>;
-  },
-
-
-  logout: () => fetchApi<{ status: string }>(`${AUTH_URL}/logout`, { method: "POST" }),
-
-  loginWithPassword: (email: string, password: string) =>
-    fetchApi<{ status: string }>(`${AUTH_URL}/login`, {
-      method: "POST",
-      body: JSON.stringify({ type: "password", email, password }),
-    }),
-
-  loginWithMagicLink: (email: string) =>
-    fetchApi<{ status: string }>(`${AUTH_URL}/login`, {
-      method: "POST",
-      body: JSON.stringify({ type: "magic_link", email }),
-    }),
-
-  loginWithOAuth: (provider: "google" | "azure") =>
-    fetchApi<{ url: string }>(`${AUTH_URL}/login`, {
-      method: "POST",
-      body: JSON.stringify({ type: "oauth", provider }),
     }),
 };

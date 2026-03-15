@@ -5,7 +5,6 @@ from functools import lru_cache
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://govtracker:govtracker@postgres:5432/govtracker"
     DATABASE_URL_SYNC: str = "postgresql+psycopg2://govtracker:govtracker@postgres:5432/govtracker"
-    REDIS_URL: str = "redis://redis:6379/0"
 
     GOVUK_BASE_URL: str = "https://www.gov.uk"
 
@@ -16,11 +15,6 @@ class Settings(BaseSettings):
 
     SPACY_MODEL: str = "en_core_web_sm"
     CORS_ALLOWED_ORIGINS: str = "http://localhost:3000"
-
-    SUPABASE_URL: str = ""
-    SUPABASE_JWKS_URL: str = ""
-    SUPABASE_JWT_ISSUER: str = ""
-    SUPABASE_JWT_AUDIENCE: str = "authenticated"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

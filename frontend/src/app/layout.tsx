@@ -1,24 +1,26 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "./providers";
 import { Header } from "@/components/Layout/Header";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "GOV Tracker",
-  description: "UK Government Policy Tracker",
+  description: "Track GOV.UK publications and parliamentary activity locally.",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 text-gray-900 min-h-screen">
+      <body>
         <Providers>
-          <Header />
-          {children}
+          <div className="min-h-screen">
+            <Header />
+            {children}
+          </div>
         </Providers>
       </body>
     </html>

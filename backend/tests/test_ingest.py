@@ -61,6 +61,11 @@ class TestParseDate:
 
 
 class TestUpsertGovukContent:
+    def test_content_id_columns_allow_long_path_identifiers(self):
+        assert RawGovukItem.__table__.c.content_id.type.length == 512
+        assert ContentItem.__table__.c.content_id.type.length == 512
+        assert Organisation.__table__.c.acronym.type.length == 256
+
     def test_creates_bronze_and_silver_records(self, db_session: Session):
         service = IngestService(db_session)
         raw = {
@@ -82,6 +87,23 @@ class TestUpsertGovukContent:
         # Bronze record should exist
         bronze = db_session.execute(select(RawGovukItem)).scalar_one()
         assert bronze.base_path == "/government/publications/ai-regulation"
+
+    def test_accepts_long_path_like_content_identifier(self, db_session: Session):
+        service = IngestService(db_session)
+        long_path = "/government/news/" + "cybersecurity-leaders-to-fortify-digital-defences-" * 2
+        raw = {
+            "_id": long_path,
+            "link": long_path,
+            "title": "Long GOV.UK Path",
+            "document_type": "world_news_story",
+        }
+
+        ci = service.upsert_govuk_content(raw, source_query="cybersecurity")
+        db_session.flush()
+
+        bronze = db_session.execute(select(RawGovukItem)).scalar_one()
+        assert ci.content_id == long_path
+        assert bronze.content_id == long_path
 
     def test_upsert_is_idempotent(self, db_session: Session):
         service = IngestService(db_session)
@@ -142,6 +164,30 @@ class TestUpsertGovukContent:
 
         link = db_session.execute(select(ContentItemOrganisation)).scalar_one()
         assert link is not None
+
+    def test_accepts_long_organisation_acronym_values(self, db_session: Session):
+        service = IngestService(db_session)
+        long_acronym = "The Traffic Commissioners for Great Britain"
+        raw = {
+            "_id": "/doc/long-org-acronym",
+            "link": "/doc/long-org-acronym",
+            "title": "Organisation Acronym Test",
+            "document_type": "notice",
+            "organisations": [
+                {
+                    "content_id": "org-long-acronym",
+                    "title": "Traffic Commissioners",
+                    "acronym": long_acronym,
+                    "slug": "traffic-commissioners",
+                }
+            ],
+        }
+
+        service.upsert_govuk_content(raw, source_query="transport")
+        db_session.flush()
+
+        org = db_session.execute(select(Organisation)).scalar_one()
+        assert org.acronym == long_acronym
 
 
 # ── Parliament: Bills ────────────────────────────────────────────────

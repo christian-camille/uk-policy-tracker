@@ -13,7 +13,7 @@ class RawGovukItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     base_path: Mapped[str] = mapped_column(String(512), unique=True, index=True)
-    content_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    content_id: Mapped[str | None] = mapped_column(String(512), index=True)
     raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(server_default=func.now())
     http_status: Mapped[int] = mapped_column(SmallInteger, default=200)

@@ -32,7 +32,6 @@ Thumbs.db
 
 # Docker volumes
 pgdata/
-redisdata/
 
 # Test / Coverage
 .coverage

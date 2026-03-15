@@ -16,35 +16,8 @@ class Topic(Base):
     label: Mapped[str] = mapped_column(String(256))
     search_queries: Mapped[list[str]] = mapped_column(ARRAY(String))
     is_global: Mapped[bool] = mapped_column(Boolean, default=True)
-    owner_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("silver.users.id"), index=True, default=None
-    )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_refreshed_at: Mapped[datetime | None] = mapped_column(default=None)
-
-
-class User(Base):
-    __tablename__ = "users"
-    __table_args__ = {"schema": "silver"}
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    auth_provider: Mapped[str] = mapped_column(String(32), default="supabase")
-    provider_subject: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    email: Mapped[str | None] = mapped_column(String(320), unique=True, default=None)
-    display_name: Mapped[str | None] = mapped_column(String(256), default=None)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    last_login_at: Mapped[datetime | None] = mapped_column(default=None)
-
-
-class TopicMembership(Base):
-    __tablename__ = "topic_memberships"
-    __table_args__ = {"schema": "silver"}
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("silver.users.id"), index=True)
-    role: Mapped[str] = mapped_column(String(32), default="follower")
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class ContentItem(Base):
@@ -52,7 +25,7 @@ class ContentItem(Base):
     __table_args__ = {"schema": "silver"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    content_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    content_id: Mapped[str] = mapped_column(String(512), unique=True, index=True)
     base_path: Mapped[str] = mapped_column(String(512), unique=True)
     title: Mapped[str] = mapped_column(String(512))
     document_type: Mapped[str] = mapped_column(String(128))
@@ -72,7 +45,7 @@ class Organisation(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     content_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     title: Mapped[str] = mapped_column(String(256))
-    acronym: Mapped[str | None] = mapped_column(String(32))
+    acronym: Mapped[str | None] = mapped_column(String(256))
     slug: Mapped[str] = mapped_column(String(128))
     state: Mapped[str] = mapped_column(String(32), default="live")
 

@@ -9,7 +9,7 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health")
 async def health_check(db: AsyncSession = Depends(get_db)):
-    health = {"status": "ok", "db": "unknown", "redis": "unknown", "freshness": {}}
+    health = {"status": "ok", "db": "unknown", "freshness": {}}
 
     # Check DB
     try:
@@ -17,21 +17,6 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         health["db"] = "connected"
     except Exception:
         health["db"] = "disconnected"
-        health["status"] = "degraded"
-
-    # Check Redis
-    try:
-        from redis import Redis
-
-        from app.config import get_settings
-
-        settings = get_settings()
-        r = Redis.from_url(settings.REDIS_URL, socket_timeout=2)
-        r.ping()
-        health["redis"] = "connected"
-        r.close()
-    except Exception:
-        health["redis"] = "disconnected"
         health["status"] = "degraded"
 
     # Source freshness

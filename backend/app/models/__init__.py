@@ -12,8 +12,6 @@ from app.models.silver import (
     Organisation,
     Person,
     Topic,
-    TopicMembership,
-    User,
     WrittenQuestion,
 )
 
@@ -22,8 +20,6 @@ __all__ = [
     "RawGovukItem",
     "RawParliamentItem",
     "Topic",
-    "User",
-    "TopicMembership",
     "ContentItem",
     "ContentItemTopic",
     "ContentItemOrganisation",

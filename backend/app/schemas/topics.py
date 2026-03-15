@@ -17,7 +17,6 @@ class TopicSummary(BaseModel):
     label: str
     search_queries: list[str]
     is_global: bool
-    owner_user_id: int | None
     last_refreshed_at: datetime | None
     new_items_count: int = 0
 

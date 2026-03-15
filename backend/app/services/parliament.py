@@ -100,7 +100,7 @@ class ParliamentClient:
     ) -> None:
         try:
             data = await self.search_bills(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament bills search failed for %r: %s", query, exc)
             return
 
@@ -115,7 +115,7 @@ class ParliamentClient:
     ) -> None:
         try:
             data = await self.search_questions(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament questions search failed for %r: %s", query, exc)
             return
 
@@ -131,7 +131,7 @@ class ParliamentClient:
     ) -> None:
         try:
             data = await self.search_divisions(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament divisions search failed for %r: %s", query, exc)
             return
 
@@ -145,7 +145,7 @@ class ParliamentClient:
 
 
 class ParliamentClientSync:
-    """Synchronous variant for use inside Celery workers."""
+    """Synchronous variant for local refresh execution."""
 
     def __init__(self, http_client: httpx.Client):
         self.http = http_client
@@ -223,7 +223,7 @@ class ParliamentClientSync:
     ) -> None:
         try:
             data = self.search_bills(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament bills search failed for %r: %s", query, exc)
             return
 
@@ -238,7 +238,7 @@ class ParliamentClientSync:
     ) -> None:
         try:
             data = self.search_questions(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament questions search failed for %r: %s", query, exc)
             return
 
@@ -254,7 +254,7 @@ class ParliamentClientSync:
     ) -> None:
         try:
             data = self.search_divisions(query, take=50)
-        except httpx.HTTPStatusError as exc:
+        except httpx.HTTPError as exc:
             logger.warning("Parliament divisions search failed for %r: %s", query, exc)
             return
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export function useTopics(scope: "all" | "shared" | "private" = "all") {
@@ -12,16 +12,15 @@ export function useTopics(scope: "all" | "shared" | "private" = "all") {
 
 export function useCreateTopic() {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({
       label,
       searchQueries,
-      isGlobal,
     }: {
       label: string;
       searchQueries: string[];
-      isGlobal: boolean;
-    }) => api.createTopic(label, searchQueries, isGlobal),
+    }) => api.createTopic(label, searchQueries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
     },
@@ -30,6 +29,7 @@ export function useCreateTopic() {
 
 export function useDeleteTopic() {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (topicId: number) => api.deleteTopic(topicId),
     onSuccess: () => {
@@ -40,10 +40,14 @@ export function useDeleteTopic() {
 
 export function useRefreshTopic() {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (topicId: number) => api.refreshTopic(topicId),
-    onSuccess: () => {
+    onSuccess: (_data: unknown, topicId: number) => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
+      queryClient.invalidateQueries({ queryKey: ["timeline", topicId] });
+      queryClient.invalidateQueries({ queryKey: ["actors", topicId] });
+      queryClient.invalidateQueries({ queryKey: ["topic", topicId] });
     },
   });
 }

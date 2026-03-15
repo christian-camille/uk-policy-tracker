@@ -31,6 +31,16 @@ class GraphService:
     async def get_node(self, node_id: int) -> GraphNode | None:
         return await self.db.get(GraphNode, node_id)
 
+    async def get_node_by_source(
+        self, entity_type: str, entity_id: int
+    ) -> GraphNode | None:
+        stmt = select(GraphNode).where(
+            GraphNode.entity_type == entity_type,
+            GraphNode.entity_id == entity_id,
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_entity_detail(self, node_id: int) -> EntityDetailResponse | None:
         node = await self.get_node(node_id)
         if not node:
@@ -41,6 +51,14 @@ class GraphService:
             node=NodeResponse.model_validate(node),
             connections=connections,
         )
+
+    async def get_entity_detail_by_source(
+        self, entity_type: str, entity_id: int
+    ) -> EntityDetailResponse | None:
+        node = await self.get_node_by_source(entity_type, entity_id)
+        if not node:
+            return None
+        return await self.get_entity_detail(node.id)
 
     async def _get_connections(self, node_id: int) -> list[EdgeResponse]:
         # Outgoing edges
@@ -122,7 +140,7 @@ class GraphService:
 class GraphProjectionBuilder:
     """
     Rebuilds the gold graph projection from silver tables.
-    Uses synchronous Session (for Celery worker context).
+    Uses a synchronous session for local refresh execution.
     """
 
     def __init__(self, db: Session):

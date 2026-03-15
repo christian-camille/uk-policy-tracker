@@ -65,7 +65,7 @@ class GovUkClient:
             while page < max_pages:
                 try:
                     data = await self.search(query, count=50, start=page * 50)
-                except httpx.HTTPStatusError as exc:
+                except httpx.HTTPError as exc:
                     logger.warning(
                         "GOV.UK search failed for query=%r page=%d: %s",
                         query, page, exc,
@@ -95,7 +95,7 @@ class GovUkClient:
 
 
 class GovUkClientSync:
-    """Synchronous variant for use inside Celery workers."""
+    """Synchronous variant for local refresh execution."""
 
     def __init__(self, http_client: httpx.Client):
         self.http = http_client
@@ -135,7 +135,7 @@ class GovUkClientSync:
             while page < max_pages:
                 try:
                     data = self.search(query, count=50, start=page * 50)
-                except httpx.HTTPStatusError as exc:
+                except httpx.HTTPError as exc:
                     logger.warning(
                         "GOV.UK search failed for query=%r page=%d: %s",
                         query, page, exc,

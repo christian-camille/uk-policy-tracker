@@ -18,7 +18,7 @@ settings = get_settings()
 async_engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
 
-# Sync engine (for Celery workers)
+# Sync engine (for local refresh operations)
 sync_engine = create_engine(settings.DATABASE_URL_SYNC, echo=False)
 SyncSessionLocal = sessionmaker(sync_engine, class_=Session, expire_on_commit=False)
 
