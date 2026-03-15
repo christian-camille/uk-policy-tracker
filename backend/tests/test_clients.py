@@ -210,6 +210,27 @@ class TestParliamentClient:
         assert len(result["items"]) == 1
 
     @respx.mock
+    async def test_get_member(self):
+        respx.get("https://members-api.parliament.uk/api/Members/999").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "value": {
+                        "id": 999,
+                        "nameDisplayAs": "John Smith",
+                        "latestParty": {"name": "Labour"},
+                    }
+                },
+            )
+        )
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            result = await client.get_member(999)
+
+        assert result["id"] == 999
+        assert result["nameDisplayAs"] == "John Smith"
+
+    @respx.mock
     async def test_search_questions(self):
         respx.get(
             "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
@@ -342,6 +363,53 @@ class TestParliamentClient:
         assert results["questions"] == []
         assert len(results["divisions"]) == 1
 
+    @respx.mock
+    async def test_discover_fetches_members_from_question_ids(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(200, json={"items": []})
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"value": {"id": 20, "heading": "Q1", "askingMemberId": 999}},
+                        {"value": {"id": 21, "heading": "Q2", "askingMemberId": 999}},
+                    ]
+                },
+            )
+        )
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(return_value=httpx.Response(200, json=[]))
+        member_route = respx.get("https://members-api.parliament.uk/api/Members/999").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "value": {
+                        "id": 999,
+                        "nameDisplayAs": "John Smith",
+                        "nameListAs": "Smith, John",
+                    }
+                },
+            )
+        )
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert len(results["questions"]) == 2
+        assert len(results["members"]) == 1
+        assert results["members"][0]["nameDisplayAs"] == "John Smith"
+        assert member_route.called
+
 
 # ── Parliament Client (sync) ─────────────────────────────────────────
 
@@ -360,6 +428,21 @@ class TestParliamentClientSync:
             result = client.search_bills("test")
 
         assert len(result["items"]) == 1
+
+    @respx.mock
+    def test_get_member(self):
+        respx.get("https://members-api.parliament.uk/api/Members/999").mock(
+            return_value=httpx.Response(
+                200,
+                json={"value": {"id": 999, "nameDisplayAs": "John Smith"}},
+            )
+        )
+        with httpx.Client() as http:
+            client = ParliamentClientSync(http)
+            result = client.get_member(999)
+
+        assert result["id"] == 999
+        assert result["nameDisplayAs"] == "John Smith"
 
     @respx.mock
     def test_discover_continues_after_transport_error(self):
@@ -386,3 +469,42 @@ class TestParliamentClientSync:
 
         assert len(results["bills"]) == 1
         assert results["questions"] == []
+
+    @respx.mock
+    def test_discover_fetches_members_from_question_ids(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(200, json={"items": []})
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"value": {"id": 20, "heading": "Q1", "askingMemberId": 999}}
+                    ]
+                },
+            )
+        )
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(return_value=httpx.Response(200, json=[]))
+        respx.get("https://members-api.parliament.uk/api/Members/999").mock(
+            return_value=httpx.Response(
+                200,
+                json={"value": {"id": 999, "nameDisplayAs": "John Smith"}},
+            )
+        )
+
+        topic = MagicMock()
+        topic.slug = "energy"
+        topic.search_queries = ["energy"]
+
+        with httpx.Client() as http:
+            client = ParliamentClientSync(http)
+            results = client.discover_for_topic(topic)
+
+        assert len(results["questions"]) == 1
+        assert len(results["members"]) == 1
+        assert results["members"][0]["nameDisplayAs"] == "John Smith"

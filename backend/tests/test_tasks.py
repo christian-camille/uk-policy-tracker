@@ -157,6 +157,54 @@ class TestIngestTasks:
         mock_client_cls.assert_not_called()
 
     @patch("app.tasks.ingest.get_sync_session")
+    @patch("app.tasks.ingest.ParliamentClientSync")
+    def test_ingest_parliament_processes_members(self, mock_client_cls, mock_session_ctx):
+        from app.tasks.ingest import ingest_parliament_for_topic
+
+        mock_topic = MagicMock()
+        mock_topic.id = 9
+        mock_topic.slug = "energy"
+        mock_topic.search_queries = ["energy"]
+        mock_topic.is_global = True
+
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_topic
+        mock_session_ctx.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_session_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_http = MagicMock()
+        mock_client = MagicMock()
+        mock_client.discover_for_topic.return_value = {
+            "bills": [{"billId": 1, "shortTitle": "Bill A"}],
+            "members": [{"id": 999, "nameDisplayAs": "John Smith"}],
+            "questions": [{"id": 20, "heading": "Q1"}],
+            "divisions": [{"DivisionId": 30, "Title": "Division A"}],
+        }
+        mock_client_cls.return_value = mock_client
+
+        with patch("app.tasks.ingest.httpx") as mock_httpx:
+            mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_http)
+            mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+            with patch("app.tasks.ingest.IngestService") as mock_ingest_cls:
+                mock_ingest = MagicMock()
+                mock_ingest_cls.return_value = mock_ingest
+
+                result = ingest_parliament_for_topic(topic_id=9)
+
+        assert result == {
+            "topic_id": 9,
+            "bills": 1,
+            "members": 1,
+            "questions": 1,
+            "divisions": 1,
+        }
+        mock_ingest.upsert_member.assert_called_once_with(
+            {"id": 999, "nameDisplayAs": "John Smith"},
+            source_query="energy",
+        )
+        mock_session.commit.assert_called_once()
+
+    @patch("app.tasks.ingest.get_sync_session")
     def test_create_activity_events(self, mock_session_ctx):
         from app.tasks.ingest import create_activity_events
 

@@ -332,6 +332,41 @@ class TestUpsertMember:
         assert person.constituency == "Holborn and St Pancras"
         assert person.is_active is True
 
+    def test_upsert_member_replaces_existing_stub(self, db_session: Session):
+        service = IngestService(db_session)
+        service.upsert_question(
+            {
+                "id": 502,
+                "uin": "12346",
+                "heading": "Question with member",
+                "house": 1,
+                "askingMemberId": 9999,
+            },
+            source_query="test",
+        )
+
+        person = service.upsert_member(
+            {
+                "id": 9999,
+                "nameDisplayAs": "John Smith",
+                "nameListAs": "Smith, John",
+                "latestParty": {"name": "Labour"},
+                "latestHouseMembership": {
+                    "house": 1,
+                    "membershipFrom": "Example Central",
+                    "membershipStatus": {"statusIsActive": True},
+                },
+            },
+            source_query="test",
+        )
+        db_session.flush()
+
+        assert person.name_display == "John Smith"
+        assert person.name_list == "Smith, John"
+        assert person.party == "Labour"
+        assert person.house == "Commons"
+        assert person.constituency == "Example Central"
+
 
 # ── Activity events ──────────────────────────────────────────────────
 

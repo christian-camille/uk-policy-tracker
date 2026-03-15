@@ -16,6 +16,20 @@ QUESTIONS_API = "https://questions-statements-api.parliament.uk/api"
 DIVISIONS_API = "https://commonsvotes-api.parliament.uk/data"
 
 
+def _unwrap_member_payload(payload: dict) -> dict:
+    return payload.get("value", payload)
+
+
+def _extract_asking_member_ids(questions: list[dict]) -> list[int]:
+    member_ids = {
+        member_id
+        for question in questions
+        for member_id in [question.get("askingMemberId")]
+        if member_id
+    }
+    return sorted(member_ids)
+
+
 class ParliamentClient:
     """Async client wrapping multiple Parliament API endpoints."""
 
@@ -31,6 +45,11 @@ class ParliamentClient:
         resp = await self.http.get(f"{MEMBERS_API}/Members/Search", params=params)
         resp.raise_for_status()
         return resp.json()
+
+    async def get_member(self, member_id: int) -> dict:
+        resp = await self.http.get(f"{MEMBERS_API}/Members/{member_id}")
+        resp.raise_for_status()
+        return _unwrap_member_payload(resp.json())
 
     async def search_bills(
         self, search_term: str, skip: int = 0, take: int = 20
@@ -86,10 +105,13 @@ class ParliamentClient:
             await self._discover_questions(query, results, seen)
             await self._discover_divisions(query, results, seen)
 
+        await self._discover_members(results["questions"], results, seen)
+
         logger.info(
-            "Parliament discovery for topic %r: bills=%d, questions=%d, divisions=%d",
+            "Parliament discovery for topic %r: bills=%d, members=%d, questions=%d, divisions=%d",
             topic.slug,
             len(results["bills"]),
+            len(results["members"]),
             len(results["questions"]),
             len(results["divisions"]),
         )
@@ -143,6 +165,24 @@ class ParliamentClient:
                 seen["divisions"].add(did)
                 results["divisions"].append(item)
 
+    async def _discover_members(
+        self, questions: list[dict], results: dict[str, list], seen: dict[str, set]
+    ) -> None:
+        for member_id in _extract_asking_member_ids(questions):
+            if member_id in seen["members"]:
+                continue
+            try:
+                member = await self.get_member(member_id)
+            except httpx.HTTPError as exc:
+                logger.warning("Parliament member lookup failed for %r: %s", member_id, exc)
+                continue
+
+            normalized_member = _unwrap_member_payload(member)
+            normalized_member_id = normalized_member.get("id")
+            if normalized_member_id and normalized_member_id not in seen["members"]:
+                seen["members"].add(normalized_member_id)
+                results["members"].append(normalized_member)
+
 
 class ParliamentClientSync:
     """Synchronous variant for local refresh execution."""
@@ -159,6 +199,11 @@ class ParliamentClientSync:
         resp = self.http.get(f"{MEMBERS_API}/Members/Search", params=params)
         resp.raise_for_status()
         return resp.json()
+
+    def get_member(self, member_id: int) -> dict:
+        resp = self.http.get(f"{MEMBERS_API}/Members/{member_id}")
+        resp.raise_for_status()
+        return _unwrap_member_payload(resp.json())
 
     def search_bills(
         self, search_term: str, skip: int = 0, take: int = 20
@@ -209,10 +254,13 @@ class ParliamentClientSync:
             self._discover_questions(query, results, seen)
             self._discover_divisions(query, results, seen)
 
+        self._discover_members(results["questions"], results, seen)
+
         logger.info(
-            "Parliament discovery for topic %r: bills=%d, questions=%d, divisions=%d",
+            "Parliament discovery for topic %r: bills=%d, members=%d, questions=%d, divisions=%d",
             topic.slug,
             len(results["bills"]),
+            len(results["members"]),
             len(results["questions"]),
             len(results["divisions"]),
         )
@@ -264,3 +312,21 @@ class ParliamentClientSync:
             if did and did not in seen["divisions"]:
                 seen["divisions"].add(did)
                 results["divisions"].append(item)
+
+    def _discover_members(
+        self, questions: list[dict], results: dict[str, list], seen: dict[str, set]
+    ) -> None:
+        for member_id in _extract_asking_member_ids(questions):
+            if member_id in seen["members"]:
+                continue
+            try:
+                member = self.get_member(member_id)
+            except httpx.HTTPError as exc:
+                logger.warning("Parliament member lookup failed for %r: %s", member_id, exc)
+                continue
+
+            normalized_member = _unwrap_member_payload(member)
+            normalized_member_id = normalized_member.get("id")
+            if normalized_member_id and normalized_member_id not in seen["members"]:
+                seen["members"].add(normalized_member_id)
+                results["members"].append(normalized_member)

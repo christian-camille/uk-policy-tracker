@@ -84,7 +84,7 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
             results = client.discover_for_topic(topic)
 
         ingest = IngestService(db)
-        counts = {"bills": 0, "questions": 0, "divisions": 0}
+        counts = {"bills": 0, "members": 0, "questions": 0, "divisions": 0}
 
         for bill_data in results["bills"]:
             succeeded = _run_isolated_ingest_step(
@@ -98,6 +98,19 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
             )
             if succeeded:
                 counts["bills"] += 1
+
+        for member_data in results["members"]:
+            succeeded = _run_isolated_ingest_step(
+                db,
+                item_label="member",
+                item_identifier=member_data.get("id"),
+                operation=lambda member_data=member_data: ingest.upsert_member(
+                    member_data,
+                    source_query=topic.slug,
+                ),
+            )
+            if succeeded:
+                counts["members"] += 1
 
         for question_data in results["questions"]:
             succeeded = _run_isolated_ingest_step(

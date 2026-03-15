@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.models.gold import GraphNode
+from app.models.gold import GraphEdge, GraphNode
 from app.models.silver import ActivityEvent
 
 
@@ -385,3 +385,46 @@ async def test_entity_lookup_by_source(client, async_session):
     data = resp.json()
     assert data["node"]["id"] == node.id
     assert data["node"]["entity_type"] == "content_item"
+
+
+@pytest.mark.asyncio
+async def test_topic_actors_return_enriched_person_labels(client, async_session):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Energy", "search_queries": ["energy"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    topic_node = GraphNode(entity_type="topic", entity_id=topic_id, label="Energy")
+    question_node = GraphNode(entity_type="question", entity_id=201, label="Question 201")
+    person_node = GraphNode(
+        entity_type="person",
+        entity_id=301,
+        label="John Smith",
+        properties={"party": "Labour", "constituency": "Example Central"},
+    )
+    async_session.add_all([topic_node, question_node, person_node])
+    await async_session.flush()
+
+    async_session.add_all(
+        [
+            GraphEdge(
+                source_node_id=question_node.id,
+                target_node_id=topic_node.id,
+                edge_type="ABOUT_TOPIC",
+            ),
+            GraphEdge(
+                source_node_id=question_node.id,
+                target_node_id=person_node.id,
+                edge_type="ASKED_BY",
+            ),
+        ]
+    )
+    await async_session.commit()
+
+    resp = await client.get(f"/api/topics/{topic_id}/actors")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["label"] == "John Smith"
