@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 from typing import TYPE_CHECKING
 
 import httpx
@@ -23,6 +24,15 @@ def _unwrap_member_payload(payload: dict) -> dict:
 
 def _unwrap_question_payload(payload: dict) -> dict:
     return payload.get("value", payload)
+
+
+def build_written_question_url(date_tabled: date | None, uin: str | None) -> str | None:
+    if not date_tabled or not uin:
+        return None
+    return (
+        "https://questions-statements.parliament.uk/written-questions/"
+        f"detail/{date_tabled.isoformat()}/{uin}"
+    )
 
 
 def _extract_asking_member_ids(questions: list[dict]) -> list[int]:

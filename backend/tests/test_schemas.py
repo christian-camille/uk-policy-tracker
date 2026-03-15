@@ -77,10 +77,12 @@ class TestTimelineSchemas:
             asking_member_name="Alex Sobel",
             question_answer_text="The government has published its answer.",
             question_answer_source_url="https://www.gov.uk/example-answer",
+            question_official_url="https://questions-statements.parliament.uk/written-questions/detail/2024-01-10/12345",
         )
         assert te.event_type == "govuk_publication"
         assert te.question_uin == "12345"
         assert te.question_answer_source_url == "https://www.gov.uk/example-answer"
+        assert te.question_official_url == "https://questions-statements.parliament.uk/written-questions/detail/2024-01-10/12345"
 
     def test_timeline_event_accepts_question_dates(self):
         te = TimelineEvent(

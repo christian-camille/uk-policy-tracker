@@ -22,6 +22,7 @@ class TimelineEvent(BaseModel):
     asking_member_name: str | None = None
     question_answer_text: str | None = None
     question_answer_source_url: str | None = None
+    question_official_url: str | None = None
 
 
 class TimelineResponse(BaseModel):

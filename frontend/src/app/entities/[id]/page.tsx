@@ -46,6 +46,7 @@ function QuestionDetail({
   const questionText = getString(properties, "question_text");
   const answerText = getString(properties, "answer_text");
   const answerSourceUrl = getString(properties, "answer_source_url");
+  const parliamentUrl = getString(properties, "parliament_url");
   const detailPairs = [
     ["Status", getString(properties, "status")],
     ["UIN", getString(properties, "uin")],
@@ -65,6 +66,30 @@ function QuestionDetail({
           </span>
         </div>
         <h1 className="max-w-3xl text-2xl font-bold text-slate-950">{label}</h1>
+        {(parliamentUrl || answerSourceUrl) && (
+          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            {parliamentUrl && (
+              <a
+                href={parliamentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+              >
+                Open Parliament record
+              </a>
+            )}
+            {answerSourceUrl && (
+              <a
+                href={answerSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+              >
+                Open referenced source
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="space-y-6 p-6">

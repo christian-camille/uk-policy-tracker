@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { FileText } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +14,8 @@ export function Timeline({
   events: TimelineEvent[];
   emptyMessage?: string;
 }) {
+  const [expandedAnswers, setExpandedAnswers] = useState<Record<number, boolean>>({});
+
   if (events.length === 0) {
     return (
       <div className="py-12 text-center text-slate-500">
@@ -37,6 +40,8 @@ export function Timeline({
           event.question_uin ? `UIN ${event.question_uin}` : null,
         ].filter(Boolean);
         const answerPreview = event.question_answer_text?.trim();
+        const isExpanded = Boolean(expandedAnswers[event.id]);
+        const shouldClampAnswer = Boolean(answerPreview) && !isExpanded;
 
         return (
           <div
@@ -93,22 +98,63 @@ export function Timeline({
 
               {isQuestionEvent && answerPreview && (
                 <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/70 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                    Answer
-                  </p>
-                  <p className="mt-1 line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-emerald-950">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                      Answer
+                    </p>
+                    {answerPreview.length > 240 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedAnswers((current) => ({
+                            ...current,
+                            [event.id]: !current[event.id],
+                          }))
+                        }
+                        className="text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+                      >
+                        {isExpanded ? "Collapse answer" : "Show full answer"}
+                      </button>
+                    )}
+                  </div>
+                  <p className={`mt-1 whitespace-pre-line text-sm leading-relaxed text-emerald-950 ${shouldClampAnswer ? "line-clamp-4" : ""}`}>
                     {answerPreview}
                   </p>
-                  {event.question_answer_source_url && (
-                    <a
-                      href={event.question_answer_source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
-                    >
-                      Open referenced source
-                    </a>
-                  )}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                    {event.question_official_url && (
+                      <a
+                        href={event.question_official_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+                      >
+                        Open Parliament record
+                      </a>
+                    )}
+                    {event.question_answer_source_url && (
+                      <a
+                        href={event.question_answer_source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+                      >
+                        Open referenced source
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isQuestionEvent && !answerPreview && event.question_official_url && (
+                <div className="mt-3">
+                  <a
+                    href={event.question_official_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex text-xs font-medium text-emerald-800 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-950"
+                  >
+                    Open Parliament record
+                  </a>
                 </div>
               )}
 

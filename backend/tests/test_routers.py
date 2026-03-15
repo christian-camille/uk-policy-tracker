@@ -339,6 +339,7 @@ async def test_timeline_includes_written_question_details(client, async_session)
     assert event["question_date_answered"] == "2026-03-12"
     assert event["question_answer_text"].startswith("The Government continues")
     assert event["question_answer_source_url"] == "https://www.gov.uk/example-answer"
+    assert event["question_official_url"] == "https://questions-statements.parliament.uk/written-questions/detail/2026-03-10/12345"
 
 
 @pytest.mark.asyncio

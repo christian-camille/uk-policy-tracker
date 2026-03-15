@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.silver import ActivityEvent, Person, Topic, WrittenQuestion
 from app.schemas.timeline import TimelineEvent, TimelineResponse
+from app.services.parliament import build_written_question_url
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
 from app.services.refresh import run_topic_refresh
 
@@ -52,6 +53,9 @@ async def _load_question_details(
             "asking_member_name": row.asking_member_name,
             "question_answer_text": row.answer_text,
             "question_answer_source_url": row.answer_source_url,
+            "question_official_url": build_written_question_url(
+                row.date_tabled, row.uin
+            ),
         }
         for row in result
     }

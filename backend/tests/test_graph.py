@@ -161,6 +161,7 @@ class TestGraphProjectionBuilder:
         assert question_node.properties["question_text"].startswith("What assessment")
         assert question_node.properties["answer_text"].startswith("The Government continues")
         assert question_node.properties["answer_source_url"] == "https://www.gov.uk/example-answer"
+        assert question_node.properties["parliament_url"] == "https://questions-statements.parliament.uk/written-questions/detail/2026-03-10/12345"
 
     def test_rebuild_creates_published_by_edges(self, db_session: Session):
         ci = make_content_item(db_session)
