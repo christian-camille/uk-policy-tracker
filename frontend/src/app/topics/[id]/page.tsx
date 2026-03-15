@@ -6,7 +6,7 @@ import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { ReadonlyURLSearchParams } from "next/navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { FormEvent, useEffect, useState, useTransition } from "react";
 import { ActorList } from "@/components/ActorList";
 import { Timeline } from "@/components/Timeline";
 import { TimelineFilters } from "@/components/TimelineFilters";
@@ -20,6 +20,8 @@ import {
   TimelineQueryParams,
   TimelineSourceType,
 } from "@/lib/types";
+
+const TIMELINE_PAGE_SIZE = 50;
 
 function formatQueryCount(value: number | undefined, label: string) {
   if (!value) {
@@ -41,6 +43,19 @@ function normalizeDateValue(value: string | null): string {
   }
 
   return value.includes("T") ? value.slice(0, 10) : value;
+}
+
+function normalizePageValue(value: string | null): number {
+  if (!value) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
 }
 
 function getMultiValue<T extends string>(
@@ -75,6 +90,30 @@ function getActivePresetDays(since: string, until: string): number | null {
   return null;
 }
 
+function buildPaginationItems(currentPage: number, totalPages: number): Array<number | string> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 3) {
+    return [1, 2, 3, 4, "ellipsis-start", totalPages];
+  }
+
+  if (currentPage >= totalPages - 2) {
+    return [1, "ellipsis-end", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [
+    1,
+    "ellipsis-left",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "ellipsis-right",
+    totalPages,
+  ];
+}
+
 export default function TopicDetailPage({
   params,
 }: {
@@ -90,6 +129,7 @@ export default function TopicDetailPage({
   const since = normalizeDateValue(searchParams.get("since"));
   const until = normalizeDateValue(searchParams.get("until"));
   const query = searchParams.get("q") ?? "";
+  const currentPage = normalizePageValue(searchParams.get("page"));
   const selectedEventTypes = getMultiValue(searchParams, "event_type", TIMELINE_EVENT_TYPE_VALUES);
   const selectedSourceTypes = getMultiValue(
     searchParams,
@@ -98,6 +138,7 @@ export default function TopicDetailPage({
   );
   const answeredOnly = searchParams.get("answered") === "1";
   const [queryDraft, setQueryDraft] = useState(query);
+  const [pageInput, setPageInput] = useState(String(currentPage));
   const activePresetDays = getActivePresetDays(since, until);
   const effectiveEventTypes = answeredOnly ? (["question_answered"] as TimelineEventType[]) : selectedEventTypes;
   const hasActiveFilters =
@@ -109,7 +150,8 @@ export default function TopicDetailPage({
     selectedSourceTypes.length > 0;
 
   const timelineParams: TimelineQueryParams = {
-    limit: 100,
+    limit: TIMELINE_PAGE_SIZE,
+    offset: (currentPage - 1) * TIMELINE_PAGE_SIZE,
   };
 
   if (since) {
@@ -145,7 +187,7 @@ export default function TopicDetailPage({
       } else {
         nextParams.delete(key);
       }
-      nextParams.delete("offset");
+      nextParams.delete("page");
     });
   }
 
@@ -153,8 +195,32 @@ export default function TopicDetailPage({
     replaceSearchParams((nextParams) => {
       nextParams.delete(key);
       values.forEach((value) => nextParams.append(key, value));
-      nextParams.delete("offset");
+      nextParams.delete("page");
     });
+  }
+
+  function setPage(page: number) {
+    const normalizedPage = totalPages > 0 ? Math.min(Math.max(page, 1), totalPages) : Math.max(page, 1);
+
+    replaceSearchParams((nextParams) => {
+      if (normalizedPage <= 1) {
+        nextParams.delete("page");
+      } else {
+        nextParams.set("page", String(normalizedPage));
+      }
+    });
+  }
+
+  function handlePageJump(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const parsedPage = Number.parseInt(pageInput, 10);
+    if (!Number.isFinite(parsedPage)) {
+      setPageInput(String(currentPage));
+      return;
+    }
+
+    setPage(parsedPage);
   }
 
   function toggleEventType(value: TimelineEventType) {
@@ -166,7 +232,7 @@ export default function TopicDetailPage({
       nextParams.delete("answered");
       nextParams.delete("event_type");
       nextValues.forEach((eventType) => nextParams.append("event_type", eventType));
-      nextParams.delete("offset");
+      nextParams.delete("page");
     });
   }
 
@@ -181,7 +247,7 @@ export default function TopicDetailPage({
   function setAnsweredOnly(value: boolean) {
     replaceSearchParams((nextParams) => {
       nextParams.delete("event_type");
-      nextParams.delete("offset");
+      nextParams.delete("page");
       if (value) {
         nextParams.set("answered", "1");
       } else {
@@ -196,13 +262,13 @@ export default function TopicDetailPage({
     replaceSearchParams((nextParams) => {
       nextParams.set("since", preset.since);
       nextParams.set("until", preset.until);
-      nextParams.delete("offset");
+      nextParams.delete("page");
     });
   }
 
   function clearFilters() {
     replaceSearchParams((nextParams) => {
-      ["since", "until", "q", "event_type", "source_entity_type", "answered", "offset"].forEach((key) => {
+      ["since", "until", "q", "event_type", "source_entity_type", "answered", "page"].forEach((key) => {
         nextParams.delete(key);
       });
     });
@@ -211,6 +277,10 @@ export default function TopicDetailPage({
   useEffect(() => {
     setQueryDraft(query);
   }, [query]);
+
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
 
   useEffect(() => {
     if (queryDraft === query) {
@@ -226,7 +296,7 @@ export default function TopicDetailPage({
       } else {
         nextParams.delete("q");
       }
-      nextParams.delete("offset");
+      nextParams.delete("page");
 
       const nextQuery = nextParams.toString();
       startRouteTransition(() => {
@@ -246,18 +316,20 @@ export default function TopicDetailPage({
 
   const {
     data: timeline,
-    fetchNextPage,
-    hasNextPage,
     isFetching,
-    isFetchingNextPage,
     isLoading: timelineLoading,
     error: timelineError,
   } = useTimeline(topicId, timelineParams);
+  const timelineEvents = timeline?.events ?? [];
+  const timelineTotal = timeline?.total ?? 0;
+  const totalPages = timelineTotal > 0 ? Math.ceil(timelineTotal / TIMELINE_PAGE_SIZE) : 0;
+  const paginationItems = totalPages > 1 ? buildPaginationItems(currentPage, totalPages) : [];
 
-  const timelinePages = timeline?.pages ?? [];
-  const timelineEvents = timelinePages.flatMap((page) => page.events);
-  const timelineTotal = timelinePages[0]?.total ?? 0;
-  const loadedTimelineCount = timelineEvents.length;
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const { data: actorsData } = useQuery({
     queryKey: ["actors", topicId],
@@ -360,7 +432,7 @@ export default function TopicDetailPage({
             activePresetDays={activePresetDays}
             hasActiveFilters={hasActiveFilters}
             resultCount={timeline ? timelineTotal : undefined}
-            isPending={isRoutePending || (isFetching && !isFetchingNextPage)}
+            isPending={isRoutePending || (isFetching && !timelineLoading)}
             onSinceChange={(value) => setSingleFilter("since", value)}
             onUntilChange={(value) => setSingleFilter("until", value)}
             onQueryChange={setQueryDraft}
@@ -388,20 +460,80 @@ export default function TopicDetailPage({
                 }
               />
 
-              {loadedTimelineCount > 0 && hasNextPage && (
-                <div className="mt-4 flex flex-col items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void fetchNextPage()}
-                    disabled={isFetchingNextPage}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isFetchingNextPage ? "Loading more..." : "Load more events"}
-                  </button>
-                  <p className="text-xs text-slate-500">
-                    Showing {loadedTimelineCount} of {timelineTotal} events
-                  </p>
-                </div>
+                {timelineTotal > 0 && totalPages > 1 && (
+                  <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-slate-500">
+                      Page {currentPage} of {totalPages}
+                      <span className="mx-2 text-slate-300">|</span>
+                      Showing {(currentPage - 1) * TIMELINE_PAGE_SIZE + 1}-{Math.min(currentPage * TIMELINE_PAGE_SIZE, timelineTotal)} of {timelineTotal}
+                    </p>
+
+                    <div className="flex flex-col gap-3 lg:items-end">
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        <button
+                          type="button"
+                          onClick={() => setPage(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+
+                        {paginationItems.map((item) =>
+                          typeof item === "number" ? (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setPage(item)}
+                              aria-current={item === currentPage ? "page" : undefined}
+                              className={`shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                                item === currentPage
+                                  ? "border-slate-900 bg-slate-900 text-white"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          ) : (
+                            <span key={item} className="px-1 text-sm text-slate-400">
+                              ...
+                            </span>
+                          )
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setPage(currentPage + 1)}
+                          disabled={currentPage >= totalPages}
+                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+
+                      <form onSubmit={handlePageJump} className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                        <label htmlFor="timeline-page-jump" className="font-medium text-slate-600">
+                          Jump to page
+                        </label>
+                        <input
+                          id="timeline-page-jump"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={totalPages}
+                          value={pageInput}
+                          onChange={(event) => setPageInput(event.target.value)}
+                          className="w-20 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          Go
+                        </button>
+                      </form>
+                    </div>
+                  </div>
               )}
             </>
           )}
