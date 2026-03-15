@@ -4,8 +4,8 @@ import { Header } from "@/components/Layout/Header";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "GOV Tracker",
-  description: "Track GOV.UK publications and parliamentary activity locally.",
+  title: "UK Policy Tracker",
+  description: "Track GOV.UK publications and parliamentary activity.",
 };
 
 export default function RootLayout({
