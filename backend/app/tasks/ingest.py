@@ -94,6 +94,7 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
                 operation=lambda bill_data=bill_data: ingest.upsert_bill(
                     bill_data,
                     source_query=topic.slug,
+                    topic_id=topic.id,
                 ),
             )
             if succeeded:
@@ -120,6 +121,7 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
                 operation=lambda question_data=question_data: ingest.upsert_question(
                     question_data,
                     source_query=topic.slug,
+                    topic_id=topic.id,
                 ),
             )
             if succeeded:
@@ -133,6 +135,7 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
                 operation=lambda division_data=division_data: ingest.upsert_division(
                     division_data,
                     source_query=topic.slug,
+                    topic_id=topic.id,
                 ),
             )
             if succeeded:

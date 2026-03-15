@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -11,12 +11,15 @@ from app.models.bronze import RawGovukItem, RawParliamentItem
 from app.models.silver import (
     ActivityEvent,
     Bill,
+    BillTopic,
     ContentItem,
     ContentItemOrganisation,
     ContentItemTopic,
     Division,
+    DivisionTopic,
     Organisation,
     Person,
+    QuestionTopic,
     WrittenQuestion,
 )
 
@@ -194,9 +197,41 @@ class IngestService:
                 )
             )
 
+    def _link_bill_topic(self, bill_id: int, topic_id: int) -> None:
+        existing = self.db.execute(
+            select(BillTopic).where(
+                BillTopic.bill_id == bill_id,
+                BillTopic.topic_id == topic_id,
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            self.db.add(BillTopic(bill_id=bill_id, topic_id=topic_id))
+
+    def _link_question_topic(self, question_id: int, topic_id: int) -> None:
+        existing = self.db.execute(
+            select(QuestionTopic).where(
+                QuestionTopic.question_id == question_id,
+                QuestionTopic.topic_id == topic_id,
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            self.db.add(QuestionTopic(question_id=question_id, topic_id=topic_id))
+
+    def _link_division_topic(self, division_id: int, topic_id: int) -> None:
+        existing = self.db.execute(
+            select(DivisionTopic).where(
+                DivisionTopic.division_id == division_id,
+                DivisionTopic.topic_id == topic_id,
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            self.db.add(DivisionTopic(division_id=division_id, topic_id=topic_id))
+
     # ── Parliament: Bills ─────────────────────────────────────────────────
 
-    def upsert_bill(self, raw_json: dict, source_query: str) -> Bill:
+    def upsert_bill(
+        self, raw_json: dict, source_query: str, topic_id: int | None = None
+    ) -> Bill:
         """Store raw JSON in bronze, parse into silver.bills."""
         bill_id = raw_json["billId"]
 
@@ -233,13 +268,20 @@ class IngestService:
         self.db.execute(stmt)
         self.db.flush()
 
-        return self.db.execute(
+        bill = self.db.execute(
             select(Bill).where(Bill.parliament_bill_id == bill_id)
         ).scalar_one()
 
+        if topic_id is not None:
+            self._link_bill_topic(bill.id, topic_id)
+
+        return bill
+
     # ── Parliament: Questions ─────────────────────────────────────────────
 
-    def upsert_question(self, raw_json: dict, source_query: str) -> WrittenQuestion:
+    def upsert_question(
+        self, raw_json: dict, source_query: str, topic_id: int | None = None
+    ) -> WrittenQuestion:
         """Store raw JSON in bronze, parse into silver.written_questions."""
         question_id = raw_json["id"]
 
@@ -284,15 +326,22 @@ class IngestService:
         self.db.execute(stmt)
         self.db.flush()
 
-        return self.db.execute(
+        question = self.db.execute(
             select(WrittenQuestion).where(
                 WrittenQuestion.parliament_question_id == question_id
             )
         ).scalar_one()
 
+        if topic_id is not None:
+            self._link_question_topic(question.id, topic_id)
+
+        return question
+
     # ── Parliament: Divisions ─────────────────────────────────────────────
 
-    def upsert_division(self, raw_json: dict, source_query: str) -> Division:
+    def upsert_division(
+        self, raw_json: dict, source_query: str, topic_id: int | None = None
+    ) -> Division:
         """Store raw JSON in bronze, parse into silver.divisions."""
         division_id = raw_json["DivisionId"]
 
@@ -322,9 +371,14 @@ class IngestService:
         self.db.execute(stmt)
         self.db.flush()
 
-        return self.db.execute(
+        division = self.db.execute(
             select(Division).where(Division.parliament_division_id == division_id)
         ).scalar_one()
+
+        if topic_id is not None:
+            self._link_division_topic(division.id, topic_id)
+
+        return division
 
     # ── Parliament: Members ───────────────────────────────────────────────
 
@@ -439,6 +493,8 @@ class IngestService:
         """
         count = 0
 
+        self._prune_stale_parliament_activity_events(topic_id)
+
         # GOV.UK content items linked to this topic
         content_items = self.db.execute(
             select(ContentItem)
@@ -461,8 +517,11 @@ class IngestService:
                 topic_id=topic_id,
             )
 
-        # Bills — all bills ingested under this query are linked to the topic
-        bills = self.db.execute(select(Bill)).scalars().all()
+        bills = self.db.execute(
+            select(Bill)
+            .join(BillTopic, BillTopic.bill_id == Bill.id)
+            .where(BillTopic.topic_id == topic_id)
+        ).scalars().all()
         for bill in bills:
             count += self._ensure_activity_event(
                 event_type="bill_stage",
@@ -475,8 +534,11 @@ class IngestService:
                 topic_id=topic_id,
             )
 
-        # Written questions
-        questions = self.db.execute(select(WrittenQuestion)).scalars().all()
+        questions = self.db.execute(
+            select(WrittenQuestion)
+            .join(QuestionTopic, QuestionTopic.question_id == WrittenQuestion.id)
+            .where(QuestionTopic.topic_id == topic_id)
+        ).scalars().all()
         for q in questions:
             event_type = "question_answered" if q.date_answered else "question_tabled"
             event_date = q.date_answered or q.date_tabled
@@ -496,8 +558,11 @@ class IngestService:
                 topic_id=topic_id,
             )
 
-        # Divisions
-        divisions = self.db.execute(select(Division)).scalars().all()
+        divisions = self.db.execute(
+            select(Division)
+            .join(DivisionTopic, DivisionTopic.division_id == Division.id)
+            .where(DivisionTopic.topic_id == topic_id)
+        ).scalars().all()
         for div in divisions:
             count += self._ensure_activity_event(
                 event_type="division_held",
@@ -515,6 +580,44 @@ class IngestService:
             "Created %d new activity events for topic_id=%d", count, topic_id
         )
         return count
+
+    def _prune_stale_parliament_activity_events(self, topic_id: int) -> None:
+        self._delete_stale_activity_events(
+            topic_id,
+            "bill",
+            self.db.execute(
+                select(BillTopic.bill_id).where(BillTopic.topic_id == topic_id)
+            ).scalars().all(),
+        )
+        self._delete_stale_activity_events(
+            topic_id,
+            "question",
+            self.db.execute(
+                select(QuestionTopic.question_id).where(QuestionTopic.topic_id == topic_id)
+            ).scalars().all(),
+        )
+        self._delete_stale_activity_events(
+            topic_id,
+            "division",
+            self.db.execute(
+                select(DivisionTopic.division_id).where(DivisionTopic.topic_id == topic_id)
+            ).scalars().all(),
+        )
+
+    def _delete_stale_activity_events(
+        self,
+        topic_id: int,
+        source_entity_type: str,
+        valid_entity_ids: list[int],
+    ) -> None:
+        stmt = delete(ActivityEvent).where(
+            ActivityEvent.topic_id == topic_id,
+            ActivityEvent.source_entity_type == source_entity_type,
+        )
+        if valid_entity_ids:
+            stmt = stmt.where(ActivityEvent.source_entity_id.not_in(valid_entity_ids))
+
+        self.db.execute(stmt)
 
     def _ensure_activity_event(
         self,

@@ -12,12 +12,15 @@ from app.models.bronze import RawGovukItem, RawParliamentItem
 from app.models.silver import (
     ActivityEvent,
     Bill,
+    BillTopic,
     ContentItem,
     ContentItemOrganisation,
     ContentItemTopic,
     Division,
+    DivisionTopic,
     Organisation,
     Person,
+    QuestionTopic,
     WrittenQuestion,
 )
 from app.services.ingest import IngestService, _parse_datetime, _parse_date
@@ -213,6 +216,25 @@ class TestUpsertBill:
         assert bill.current_stage == "Report stage"
         assert bill.parliament_bill_id == 100
 
+    def test_links_bill_to_topic(self, db_session: Session):
+        topic = make_topic(db_session)
+        service = IngestService(db_session)
+        bill = service.upsert_bill(
+            {
+                "billId": 101,
+                "shortTitle": "Topic-linked Bill",
+                "isAct": False,
+                "isDefeated": False,
+            },
+            source_query="test",
+            topic_id=topic.id,
+        )
+        db_session.flush()
+
+        link = db_session.execute(select(BillTopic)).scalar_one()
+        assert link.bill_id == bill.id
+        assert link.topic_id == topic.id
+
     def test_upsert_bill_updates_existing(self, db_session: Session):
         service = IngestService(db_session)
         raw = {
@@ -282,6 +304,25 @@ class TestUpsertQuestion:
         ).scalar_one()
         assert person.name_display == "Member #9999"
 
+    def test_links_question_to_topic(self, db_session: Session):
+        topic = make_topic(db_session)
+        service = IngestService(db_session)
+        question = service.upsert_question(
+            {
+                "id": 503,
+                "uin": "12347",
+                "heading": "Topic-linked question",
+                "house": 1,
+            },
+            source_query="test",
+            topic_id=topic.id,
+        )
+        db_session.flush()
+
+        link = db_session.execute(select(QuestionTopic)).scalar_one()
+        assert link.question_id == question.id
+        assert link.topic_id == topic.id
+
 
 # ── Parliament: Divisions ────────────────────────────────────────────
 
@@ -303,6 +344,26 @@ class TestUpsertDivision:
         assert div.title == "Motion on Climate Change"
         assert div.aye_count == 300
         assert div.no_count == 200
+
+    def test_links_division_to_topic(self, db_session: Session):
+        topic = make_topic(db_session)
+        service = IngestService(db_session)
+        division = service.upsert_division(
+            {
+                "DivisionId": 301,
+                "Title": "Topic-linked division",
+                "Date": "2024-02-16T14:30:00Z",
+                "AyeCount": 250,
+                "NoCount": 150,
+            },
+            source_query="test",
+            topic_id=topic.id,
+        )
+        db_session.flush()
+
+        link = db_session.execute(select(DivisionTopic)).scalar_one()
+        assert link.division_id == division.id
+        assert link.topic_id == topic.id
 
 
 # ── Parliament: Members ──────────────────────────────────────────────
@@ -401,3 +462,118 @@ class TestCreateActivityEvents:
 
         assert count1 >= 1
         assert count2 == 0  # No new events created second time
+
+    def test_creates_parliament_events_only_for_linked_topic(self, db_session: Session):
+        topic_a = make_topic(db_session, slug="topic-a", label="Topic A")
+        topic_b = make_topic(db_session, slug="topic-b", label="Topic B")
+        service = IngestService(db_session)
+
+        bill_a = service.upsert_bill(
+            {
+                "billId": 501,
+                "shortTitle": "Bill A",
+                "isAct": False,
+                "isDefeated": False,
+            },
+            source_query="topic-a",
+            topic_id=topic_a.id,
+        )
+        service.upsert_bill(
+            {
+                "billId": 502,
+                "shortTitle": "Bill B",
+                "isAct": False,
+                "isDefeated": False,
+            },
+            source_query="topic-b",
+            topic_id=topic_b.id,
+        )
+        question_a = service.upsert_question(
+            {
+                "id": 601,
+                "uin": "Q-601",
+                "heading": "Question A",
+                "house": 1,
+                "dateTabled": "2024-03-01T00:00:00Z",
+            },
+            source_query="topic-a",
+            topic_id=topic_a.id,
+        )
+        service.upsert_question(
+            {
+                "id": 602,
+                "uin": "Q-602",
+                "heading": "Question B",
+                "house": 1,
+                "dateTabled": "2024-03-02T00:00:00Z",
+            },
+            source_query="topic-b",
+            topic_id=topic_b.id,
+        )
+        division_a = service.upsert_division(
+            {
+                "DivisionId": 701,
+                "Title": "Division A",
+                "Date": "2024-02-15T14:30:00Z",
+                "AyeCount": 300,
+                "NoCount": 200,
+            },
+            source_query="topic-a",
+            topic_id=topic_a.id,
+        )
+        service.upsert_division(
+            {
+                "DivisionId": 702,
+                "Title": "Division B",
+                "Date": "2024-02-16T14:30:00Z",
+                "AyeCount": 250,
+                "NoCount": 210,
+            },
+            source_query="topic-b",
+            topic_id=topic_b.id,
+        )
+        db_session.flush()
+
+        count = service.create_activity_events_for_topic(topic_a.id)
+        db_session.flush()
+
+        events = db_session.execute(
+            select(ActivityEvent)
+            .where(ActivityEvent.topic_id == topic_a.id)
+            .order_by(ActivityEvent.source_entity_type, ActivityEvent.source_entity_id)
+        ).scalars().all()
+
+        assert count == 3
+        assert [event.source_entity_type for event in events] == ["bill", "division", "question"]
+        assert [event.source_entity_id for event in events] == [bill_a.id, division_a.id, question_a.id]
+
+    def test_prunes_stale_parliament_events_for_topic(self, db_session: Session):
+        topic = make_topic(db_session)
+        stale_bill = make_bill(db_session)
+        db_session.add(
+            ActivityEvent(
+                event_type="bill_stage",
+                event_date=datetime.utcnow(),
+                title=stale_bill.short_title,
+                summary=None,
+                source_url=None,
+                source_entity_type="bill",
+                source_entity_id=stale_bill.id,
+                topic_id=topic.id,
+            )
+        )
+        db_session.flush()
+
+        service = IngestService(db_session)
+        count = service.create_activity_events_for_topic(topic.id)
+        db_session.flush()
+
+        remaining = db_session.execute(
+            select(ActivityEvent).where(
+                ActivityEvent.topic_id == topic.id,
+                ActivityEvent.source_entity_type == "bill",
+            )
+        ).scalars().all()
+
+        assert count == 0
+        assert remaining == []

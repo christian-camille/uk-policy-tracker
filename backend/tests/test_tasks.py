@@ -198,9 +198,24 @@ class TestIngestTasks:
             "questions": 1,
             "divisions": 1,
         }
+        mock_ingest.upsert_bill.assert_called_once_with(
+            {"billId": 1, "shortTitle": "Bill A"},
+            source_query="energy",
+            topic_id=9,
+        )
         mock_ingest.upsert_member.assert_called_once_with(
             {"id": 999, "nameDisplayAs": "John Smith"},
             source_query="energy",
+        )
+        mock_ingest.upsert_question.assert_called_once_with(
+            {"id": 20, "heading": "Q1"},
+            source_query="energy",
+            topic_id=9,
+        )
+        mock_ingest.upsert_division.assert_called_once_with(
+            {"DivisionId": 30, "Title": "Division A"},
+            source_query="energy",
+            topic_id=9,
         )
         mock_session.commit.assert_called_once()
 

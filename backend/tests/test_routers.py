@@ -394,16 +394,38 @@ async def test_topic_actors_return_enriched_person_labels(client, async_session)
         json={"label": "Energy", "search_queries": ["energy"]},
     )
     topic_id = create_resp.json()["id"]
+    other_resp = await client.post(
+        "/api/topics",
+        json={"label": "Health", "search_queries": ["health"]},
+    )
+    other_topic_id = other_resp.json()["id"]
 
     topic_node = GraphNode(entity_type="topic", entity_id=topic_id, label="Energy")
+    other_topic_node = GraphNode(entity_type="topic", entity_id=other_topic_id, label="Health")
     question_node = GraphNode(entity_type="question", entity_id=201, label="Question 201")
+    other_question_node = GraphNode(entity_type="question", entity_id=202, label="Question 202")
     person_node = GraphNode(
         entity_type="person",
         entity_id=301,
         label="John Smith",
         properties={"party": "Labour", "constituency": "Example Central"},
     )
-    async_session.add_all([topic_node, question_node, person_node])
+    other_person_node = GraphNode(
+        entity_type="person",
+        entity_id=302,
+        label="Jane Doe",
+        properties={"party": "Green", "constituency": "Other Central"},
+    )
+    async_session.add_all(
+        [
+            topic_node,
+            other_topic_node,
+            question_node,
+            other_question_node,
+            person_node,
+            other_person_node,
+        ]
+    )
     await async_session.flush()
 
     async_session.add_all(
@@ -418,13 +440,28 @@ async def test_topic_actors_return_enriched_person_labels(client, async_session)
                 target_node_id=person_node.id,
                 edge_type="ASKED_BY",
             ),
+            GraphEdge(
+                source_node_id=other_question_node.id,
+                target_node_id=other_topic_node.id,
+                edge_type="ABOUT_TOPIC",
+            ),
+            GraphEdge(
+                source_node_id=other_question_node.id,
+                target_node_id=other_person_node.id,
+                edge_type="ASKED_BY",
+            ),
         ]
     )
     await async_session.commit()
 
     resp = await client.get(f"/api/topics/{topic_id}/actors")
+    other_topic_resp = await client.get(f"/api/topics/{other_topic_id}/actors")
 
     assert resp.status_code == 200
+    assert other_topic_resp.status_code == 200
     data = resp.json()
+    other_data = other_topic_resp.json()
     assert len(data) == 1
+    assert len(other_data) == 1
     assert data[0]["label"] == "John Smith"
+    assert other_data[0]["label"] == "Jane Doe"

@@ -125,6 +125,43 @@ class ContentItemTopic(Base):
     topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
 
 
+class BillTopic(Base):
+    """Junction table linking Parliament bills to topics they were discovered under."""
+
+    __tablename__ = "bill_topics"
+    __table_args__ = {"schema": "silver"}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bill_id: Mapped[int] = mapped_column(ForeignKey("silver.bills.id"), index=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+
+
+class QuestionTopic(Base):
+    """Junction table linking written questions to topics they were discovered under."""
+
+    __tablename__ = "question_topics"
+    __table_args__ = {"schema": "silver"}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("silver.written_questions.id"), index=True
+    )
+    topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+
+
+class DivisionTopic(Base):
+    """Junction table linking divisions to topics they were discovered under."""
+
+    __tablename__ = "division_topics"
+    __table_args__ = {"schema": "silver"}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    division_id: Mapped[int] = mapped_column(
+        ForeignKey("silver.divisions.id"), index=True
+    )
+    topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+
+
 class ContentItemOrganisation(Base):
     """Junction table linking content items to their publishing organisations."""
 
