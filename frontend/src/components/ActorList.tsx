@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Actor } from "@/lib/types";
 
 export function ActorList({ actors }: { actors: Actor[] }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
+
   if (actors.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
@@ -15,7 +20,7 @@ export function ActorList({ actors }: { actors: Actor[] }) {
       {actors.map((actor) => (
         <Link
           key={actor.id}
-          href={`/entities/${actor.id}`}
+          href={`/entities/${actor.id}?from=${encodeURIComponent(returnTo)}`}
           className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
         >
           <div className="flex items-start justify-between gap-3">

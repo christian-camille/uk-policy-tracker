@@ -4,6 +4,7 @@ import { useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { FileText } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { TimelineEvent } from "@/lib/types";
 import { TIMELINE_EVENT_CONFIG } from "@/lib/timeline";
 
@@ -15,6 +16,9 @@ export function Timeline({
   emptyMessage?: string;
 }) {
   const [expandedAnswers, setExpandedAnswers] = useState<Record<number, boolean>>({});
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
   if (events.length === 0) {
     return (
@@ -171,10 +175,7 @@ export function Timeline({
 
               <div className="mt-2">
                 <Link
-                  href={{
-                    pathname: `/entities/${event.source_entity_id}`,
-                    query: { entityType: event.source_entity_type },
-                  }}
+                  href={`/entities/${event.source_entity_id}?entityType=${encodeURIComponent(event.source_entity_type)}&from=${encodeURIComponent(returnTo)}`}
                   className="text-xs text-blue-600 hover:underline"
                 >
                   View entity details

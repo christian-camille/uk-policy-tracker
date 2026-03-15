@@ -26,6 +26,10 @@ function getInitials(label: string) {
     .join("");
 }
 
+function isSafeInternalPath(value: string | null): value is string {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//");
+}
+
 function renderGenericProperties(properties: EntityProperties) {
   return (
     <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
@@ -229,6 +233,9 @@ export default function EntityDetailPage({
   const parsedId = Number.parseInt(params.id, 10);
   const entityId = Number.isNaN(parsedId) ? undefined : parsedId;
   const entityType = searchParams.get("entityType") ?? undefined;
+  const from = searchParams.get("from");
+  const backHref = isSafeInternalPath(from) ? from : "/";
+  const backLabel = backHref === "/" ? "Back to Watchlist" : "Back";
   const { data, isLoading, error } = useEntity(
     entityType ? { entityType, entityId } : { nodeId: entityId }
   );
@@ -236,11 +243,11 @@ export default function EntityDetailPage({
   return (
     <main className="mx-auto max-w-4xl p-6">
       <Link
-        href="/"
+        href={backHref}
         className="mb-6 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Watchlist
+        {backLabel}
       </Link>
 
       {isLoading && <div className="py-12 text-center text-slate-500">Loading entity...</div>}

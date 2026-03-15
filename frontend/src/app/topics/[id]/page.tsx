@@ -366,6 +366,7 @@ export default function TopicDetailPage({
     queryFn: () => api.getActors(topicId),
     enabled: Number.isFinite(topicId),
   });
+  const actorCount = actorsData?.length ?? 0;
 
   const refreshResult = refreshMutation.data as RefreshTopicResponse | undefined;
   const summaryItems = [
@@ -588,7 +589,10 @@ export default function TopicDetailPage({
         </div>
 
         <aside>
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">Key Actors</h2>
+          <h2 className="mb-4 text-lg font-semibold text-slate-900">
+            Key Actors
+            <span className="ml-2 text-sm font-normal text-slate-400">({actorCount})</span>
+          </h2>
           <ActorList actors={actorsData ?? []} />
         </aside>
       </div>

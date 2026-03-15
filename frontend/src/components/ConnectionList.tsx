@@ -2,6 +2,7 @@
 
 import { format } from "date-fns";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { GraphEdge } from "@/lib/types";
 
@@ -224,7 +225,7 @@ function defaultGroupCollapsed(entityType: string, focusEntityType?: string) {
   return false;
 }
 
-function renderConnectionCard(connection: GraphEdge, index: number) {
+function renderConnectionCard(connection: GraphEdge, index: number, returnTo: string) {
   const entityConfig = ENTITY_TYPE_CONFIG[connection.connected_node.entity_type] ?? {
     badgeClassName: "bg-slate-100 text-slate-700 border border-slate-200",
     label: formatEntityType(connection.connected_node.entity_type),
@@ -252,7 +253,7 @@ function renderConnectionCard(connection: GraphEdge, index: number) {
           </div>
 
           <Link
-            href={`/entities/${connection.connected_node.id}`}
+            href={`/entities/${connection.connected_node.id}?from=${encodeURIComponent(returnTo)}`}
             className="text-base font-semibold text-slate-900 hover:text-blue-800 hover:underline"
           >
             {connection.connected_node.label}
@@ -298,6 +299,9 @@ export function ConnectionList({
   const [directionFilter, setDirectionFilter] = useState("all");
   const [sortMode, setSortMode] = useState<keyof typeof SORT_LABELS>("relevance");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
   if (connections.length === 0) {
     return (
@@ -442,7 +446,7 @@ export function ConnectionList({
               {!isCollapsed && (
                 <div className="space-y-3 p-4">
                   {groupConnections.map((connection, index) =>
-                    renderConnectionCard(connection, index)
+                    renderConnectionCard(connection, index, returnTo)
                   )}
                 </div>
               )}
@@ -450,7 +454,7 @@ export function ConnectionList({
           );
         })
       ) : (
-        visibleConnections.map((connection, index) => renderConnectionCard(connection, index))
+        visibleConnections.map((connection, index) => renderConnectionCard(connection, index, returnTo))
       )}
     </div>
   );
