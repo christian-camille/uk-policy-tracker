@@ -170,13 +170,21 @@ export default function TopicDetailPage({
     timelineParams.q = query;
   }
 
-  function replaceSearchParams(mutator: (nextParams: URLSearchParams) => void) {
+  function replaceSearchParams(
+    mutator: (nextParams: URLSearchParams) => void,
+    options?: { scrollToTop?: boolean }
+  ) {
     const nextParams = new URLSearchParams(searchParams.toString());
     mutator(nextParams);
     const nextQuery = nextParams.toString();
 
     startRouteTransition(() => {
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+        scroll: options?.scrollToTop ?? false,
+      });
+      if (options?.scrollToTop) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     });
   }
 
@@ -208,7 +216,7 @@ export default function TopicDetailPage({
       } else {
         nextParams.set("page", String(normalizedPage));
       }
-    });
+    }, { scrollToTop: true });
   }
 
   function handlePageJump(event: FormEvent<HTMLFormElement>) {
