@@ -489,6 +489,37 @@ async def test_refresh_topic_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_refresh_all_topics_runs_direct_service(client):
+    await client.post(
+        "/api/topics",
+        json={"label": "Transport", "search_queries": ["transport"]},
+    )
+    await client.post(
+        "/api/topics",
+        json={"label": "Health", "search_queries": ["health"]},
+    )
+
+    mock_result = {
+        "status": "completed",
+        "topics": 2,
+        "results": [
+            {"topic_id": 1, "result": {"events": {"events_created": 2}}},
+            {"topic_id": 2, "result": {"events": {"events_created": 1}}},
+        ],
+    }
+
+    with patch(
+        "app.routers.topics.run_all_topic_refreshes",
+        return_value=mock_result,
+    ) as refresh_mock:
+        resp = await client.post("/api/topics/refresh-all")
+
+    assert resp.status_code == 200
+    assert resp.json() == mock_result
+    refresh_mock.assert_called_once_with()
+
+
+@pytest.mark.asyncio
 async def test_entity_not_found(client):
     resp = await client.get("/api/entities/9999")
     assert resp.status_code == 404

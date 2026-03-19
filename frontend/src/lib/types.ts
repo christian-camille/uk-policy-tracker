@@ -132,3 +132,14 @@ export interface RefreshTopicResponse {
   topic_id: number;
   result: RefreshSummary;
 }
+
+export interface RefreshAllTopicsResult {
+  topic_id: number;
+  result: RefreshSummary;
+}
+
+export interface RefreshAllTopicsResponse {
+  status: string;
+  topics: number;
+  results: RefreshAllTopicsResult[];
+}

@@ -1,13 +1,14 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { TopicCard } from "@/components/TopicCard";
-import { useCreateTopic, useTopics } from "@/hooks/useTopics";
+import { useCreateTopic, useRefreshAllTopics, useTopics } from "@/hooks/useTopics";
 
 export default function WatchlistPage() {
   const { data, isLoading, error } = useTopics();
   const createMutation = useCreateTopic();
+  const refreshAllMutation = useRefreshAllTopics();
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
   const [queries, setQueries] = useState("");
@@ -59,14 +60,44 @@ export default function WatchlistPage() {
               Track GOV.UK publications and parliamentary activity for the topics you care about, with everything stored locally in PostgreSQL.
             </p>
           </div>
-          <button
-            onClick={() => setShowForm((current) => !current)}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-          >
-            <Plus className="h-4 w-4" />
-            {showForm ? "Close" : "Add Topic"}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              onClick={() => refreshAllMutation.mutate()}
+              disabled={refreshAllMutation.isPending || topics.length === 0}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
+              {refreshAllMutation.isPending ? "Refreshing All..." : "Refresh All"}
+            </button>
+            <button
+              onClick={() => setShowForm((current) => !current)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            >
+              <Plus className="h-4 w-4" />
+              {showForm ? "Close" : "Add Topic"}
+            </button>
+          </div>
         </div>
+
+        {refreshAllMutation.isPending && (
+          <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            Refreshing every tracked topic. This runs GOV.UK ingest, Parliament ingest, event creation, entity matching, and graph rebuilds for each topic.
+          </div>
+        )}
+
+        {refreshAllMutation.isError && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Failed to refresh all topics. Try again after the upstream APIs recover.
+          </div>
+        )}
+
+        {refreshAllMutation.isSuccess && (
+          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+            {refreshAllMutation.data.topics > 0
+              ? `Refresh completed for ${refreshAllMutation.data.topics} topic${refreshAllMutation.data.topics === 1 ? "" : "s"}.`
+              : "No shared topics were available to refresh."}
+          </div>
+        )}
 
         {showForm && (
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">

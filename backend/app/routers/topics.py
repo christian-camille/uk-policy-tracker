@@ -12,7 +12,7 @@ from app.models.silver import ActivityEvent, Person, Topic, WrittenQuestion
 from app.schemas.timeline import TimelineEvent, TimelineResponse
 from app.services.parliament import build_written_question_url
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary, TopicUpdate
-from app.services.refresh import run_topic_refresh
+from app.services.refresh import run_all_topic_refreshes, run_topic_refresh
 
 router = APIRouter(prefix="/topics", tags=["topics"])
 
@@ -194,6 +194,12 @@ async def create_topic(
     await db.refresh(topic)
 
     return _to_topic_summary(topic, 0)
+
+
+@router.post("/refresh-all")
+async def trigger_refresh_all_topics():
+    """Trigger an on-demand refresh of all tracked topics."""
+    return run_all_topic_refreshes()
 
 
 @router.get("/{topic_id}", response_model=TopicSummary)

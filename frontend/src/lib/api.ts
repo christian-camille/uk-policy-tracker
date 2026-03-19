@@ -1,6 +1,7 @@
 import {
   Actor,
   EntityDetail,
+  RefreshAllTopicsResponse,
   RefreshTopicResponse,
   TimelineQueryParams,
   TimelineResponse,
@@ -96,6 +97,11 @@ export const api = {
 
   refreshTopic: (topicId: number) =>
     fetchApi<RefreshTopicResponse>(`${BFF_URL}/topics/${topicId}/refresh`, {
+      method: "POST",
+    }),
+
+  refreshAllTopics: () =>
+    fetchApi<RefreshAllTopicsResponse>(`${BFF_URL}/topics/refresh-all`, {
       method: "POST",
     }),
 };

@@ -73,3 +73,17 @@ export function useRefreshTopic() {
     },
   });
 }
+
+export function useRefreshAllTopics() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.refreshAllTopics(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["topics"] });
+      queryClient.invalidateQueries({ queryKey: ["timeline"] });
+      queryClient.invalidateQueries({ queryKey: ["actors"] });
+      queryClient.invalidateQueries({ queryKey: ["topic"] });
+    },
+  });
+}
