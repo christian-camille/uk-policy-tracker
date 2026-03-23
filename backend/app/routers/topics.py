@@ -1,4 +1,3 @@
-import json
 import re
 from datetime import datetime
 from typing import Literal
@@ -13,6 +12,7 @@ from app.schemas.timeline import TimelineEvent, TimelineResponse
 from app.services.parliament import build_written_question_url
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary, TopicUpdate
 from app.services.refresh import run_all_topic_refreshes, run_topic_refresh
+from app.services.topic_rules import build_topic_keyword_rules, validate_topic_keyword_rules
 
 router = APIRouter(prefix="/topics", tags=["topics"])
 
@@ -85,46 +85,23 @@ def _slugify(text: str) -> str:
     return slug.strip("-")
 
 
-def _parse_search_queries_text(raw: str) -> list[str]:
-    normalized_raw = raw.strip()
-    if not normalized_raw:
-        return []
-
-    try:
-        parsed = json.loads(normalized_raw)
-    except json.JSONDecodeError:
-        parsed = None
-
-    if isinstance(parsed, list):
-        return [str(item).strip() for item in parsed if str(item).strip()]
-
-    return [part.strip() for part in normalized_raw.split(",") if part.strip()]
-
-
-def _normalize_search_queries(value: object) -> list[str]:
-    if isinstance(value, list):
-        raw_items = [str(item) for item in value]
-        non_empty_raw_items = [item for item in raw_items if item != ""]
-
-        # SQLite test runs can return ARRAY values as character arrays of a JSON string.
-        if non_empty_raw_items and all(len(item) == 1 for item in non_empty_raw_items):
-            parsed_items = _parse_search_queries_text("".join(non_empty_raw_items))
-            if parsed_items:
-                return parsed_items
-
-        return [item.strip() for item in raw_items if item.strip()]
-
-    if isinstance(value, str):
-        return _parse_search_queries_text(value)
-
-    return []
-
-
 def _to_topic_summary(topic: Topic, new_items_count: int) -> TopicSummary:
-    summary = TopicSummary.model_validate(topic)
-    summary.search_queries = _normalize_search_queries(topic.search_queries)
-    summary.new_items_count = new_items_count
-    return summary
+    rules = build_topic_keyword_rules(
+        keyword_groups=topic.keyword_groups,
+        excluded_keywords=topic.excluded_keywords,
+        search_queries=topic.search_queries,
+    )
+    return TopicSummary(
+        id=topic.id,
+        slug=topic.slug,
+        label=topic.label,
+        search_queries=rules.search_queries,
+        keyword_groups=rules.keyword_groups,
+        excluded_keywords=rules.excluded_keywords,
+        is_global=topic.is_global,
+        last_refreshed_at=topic.last_refreshed_at,
+        new_items_count=new_items_count,
+    )
 
 
 async def _get_topic_or_404(db: AsyncSession, topic_id: int) -> Topic:
@@ -173,9 +150,17 @@ async def create_topic(
     if not slug:
         raise HTTPException(status_code=400, detail="Topic label is invalid")
 
-    normalized_queries = [query.strip() for query in payload.search_queries if query.strip()]
-    if not normalized_queries:
-        raise HTTPException(status_code=400, detail="Topic search queries cannot be empty")
+    rules = build_topic_keyword_rules(
+        keyword_groups=payload.keyword_groups,
+        excluded_keywords=payload.excluded_keywords,
+        search_queries=payload.search_queries,
+    )
+    try:
+        validate_topic_keyword_rules(rules)
+    except ValueError as exc:
+        if payload.search_queries is not None and payload.keyword_groups is None and not rules.keyword_groups:
+            raise HTTPException(status_code=400, detail="Topic search queries cannot be empty") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     existing_stmt = select(Topic).where(Topic.slug == slug)
 
@@ -186,7 +171,9 @@ async def create_topic(
     topic = Topic(
         slug=slug,
         label=payload.label.strip(),
-        search_queries=normalized_queries,
+        search_queries=rules.search_queries,
+        keyword_groups=rules.keyword_groups,
+        excluded_keywords=rules.excluded_keywords,
         is_global=True,
     )
     db.add(topic)
@@ -225,7 +212,12 @@ async def update_topic(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an existing topic label and/or search queries."""
-    if payload.label is None and payload.search_queries is None:
+    if (
+        payload.label is None
+        and payload.search_queries is None
+        and payload.keyword_groups is None
+        and payload.excluded_keywords is None
+    ):
         raise HTTPException(status_code=400, detail="No topic fields provided for update")
 
     topic = await _get_topic_or_404(db, topic_id)
@@ -248,11 +240,30 @@ async def update_topic(
         topic.label = normalized_label
         topic.slug = next_slug
 
-    if payload.search_queries is not None:
-        normalized_queries = [query.strip() for query in payload.search_queries if query.strip()]
-        if not normalized_queries:
-            raise HTTPException(status_code=400, detail="Topic search queries cannot be empty")
-        topic.search_queries = normalized_queries
+    if payload.search_queries is not None or payload.keyword_groups is not None or payload.excluded_keywords is not None:
+        existing_rules = build_topic_keyword_rules(
+            keyword_groups=topic.keyword_groups,
+            excluded_keywords=topic.excluded_keywords,
+            search_queries=topic.search_queries,
+        )
+        next_keyword_groups = payload.keyword_groups
+        if next_keyword_groups is None and payload.search_queries is None:
+            next_keyword_groups = existing_rules.keyword_groups
+
+        rules = build_topic_keyword_rules(
+            keyword_groups=next_keyword_groups,
+            excluded_keywords=(payload.excluded_keywords if payload.excluded_keywords is not None else existing_rules.excluded_keywords),
+            search_queries=(payload.search_queries if payload.search_queries is not None else existing_rules.search_queries),
+        )
+        try:
+            validate_topic_keyword_rules(rules)
+        except ValueError as exc:
+            if payload.search_queries is not None and payload.keyword_groups is None and not rules.keyword_groups:
+                raise HTTPException(status_code=400, detail="Topic search queries cannot be empty") from exc
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        topic.search_queries = rules.search_queries
+        topic.keyword_groups = rules.keyword_groups
+        topic.excluded_keywords = rules.excluded_keywords
 
     await db.commit()
     await db.refresh(topic)

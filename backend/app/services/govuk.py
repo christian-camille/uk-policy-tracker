@@ -5,12 +5,38 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from app.services.topic_rules import (
+    build_topic_keyword_rules,
+    compile_candidate_text,
+    expand_upstream_queries,
+    has_advanced_keyword_rules,
+    matches_topic_rules,
+)
+
 if TYPE_CHECKING:
     from app.models.silver import Topic
 
 logger = logging.getLogger(__name__)
 
 GOVUK_BASE = "https://www.gov.uk"
+
+
+def _matches_govuk_topic_rules(topic: Topic, result: dict) -> bool:
+    rules = build_topic_keyword_rules(
+        keyword_groups=getattr(topic, "keyword_groups", None),
+        excluded_keywords=getattr(topic, "excluded_keywords", None),
+        search_queries=getattr(topic, "search_queries", None),
+    )
+    if not has_advanced_keyword_rules(rules):
+        return True
+    candidate_text = compile_candidate_text(
+        result.get("title"),
+        result.get("description"),
+        result.get("link"),
+        result.get("content_purpose_supergroup"),
+        result.get("document_type"),
+    )
+    return matches_topic_rules(rules, candidate_text)
 
 
 class GovUkClient:
@@ -58,8 +84,14 @@ class GovUkClient:
         """
         all_results: list[dict] = []
         seen_ids: set[str] = set()
+        rules = build_topic_keyword_rules(
+            keyword_groups=getattr(topic, "keyword_groups", None),
+            excluded_keywords=getattr(topic, "excluded_keywords", None),
+            search_queries=getattr(topic, "search_queries", None),
+        )
+        queries = expand_upstream_queries(rules)
 
-        for query in topic.search_queries:
+        for query in queries:
             page = 0
             max_pages = 10  # Safety cap: 500 items per query
             while page < max_pages:
@@ -78,7 +110,7 @@ class GovUkClient:
 
                 for r in results:
                     rid = r.get("_id")
-                    if rid and rid not in seen_ids:
+                    if rid and rid not in seen_ids and _matches_govuk_topic_rules(topic, r):
                         seen_ids.add(rid)
                         all_results.append(r)
 
@@ -89,7 +121,7 @@ class GovUkClient:
 
         logger.info(
             "GOV.UK discovery for topic %r: %d unique results from %d queries",
-            topic.slug, len(all_results), len(topic.search_queries),
+            topic.slug, len(all_results), len(queries),
         )
         return all_results
 
@@ -128,8 +160,14 @@ class GovUkClientSync:
     def discover_for_topic(self, topic: Topic) -> list[dict]:
         all_results: list[dict] = []
         seen_ids: set[str] = set()
+        rules = build_topic_keyword_rules(
+            keyword_groups=getattr(topic, "keyword_groups", None),
+            excluded_keywords=getattr(topic, "excluded_keywords", None),
+            search_queries=getattr(topic, "search_queries", None),
+        )
+        queries = expand_upstream_queries(rules)
 
-        for query in topic.search_queries:
+        for query in queries:
             page = 0
             max_pages = 10
             while page < max_pages:
@@ -148,7 +186,7 @@ class GovUkClientSync:
 
                 for r in results:
                     rid = r.get("_id")
-                    if rid and rid not in seen_ids:
+                    if rid and rid not in seen_ids and _matches_govuk_topic_rules(topic, r):
                         seen_ids.add(rid)
                         all_results.append(r)
 
@@ -159,6 +197,6 @@ class GovUkClientSync:
 
         logger.info(
             "GOV.UK discovery for topic %r: %d unique results from %d queries",
-            topic.slug, len(all_results), len(topic.search_queries),
+            topic.slug, len(all_results), len(queries),
         )
         return all_results

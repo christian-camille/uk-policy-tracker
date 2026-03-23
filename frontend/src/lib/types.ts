@@ -3,6 +3,8 @@ export interface TopicSummary {
   slug: string;
   label: string;
   search_queries: string[];
+  keyword_groups: string[][];
+  excluded_keywords: string[];
   is_global: boolean;
   last_refreshed_at: string | null;
   new_items_count: number;

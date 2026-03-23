@@ -90,8 +90,28 @@ async def test_create_topic(client):
     data = resp.json()
     assert data["label"] == "AI Policy"
     assert data["slug"] == "ai-policy"
+    assert data["keyword_groups"] == [["artificial intelligence"]]
+    assert data["excluded_keywords"] == []
     assert data["is_global"] is True
     assert data["new_items_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_topic_with_keyword_groups_and_exclusions(client):
+    resp = await client.post(
+        "/api/topics",
+        json={
+            "label": "Planning Reform",
+            "keyword_groups": [["housing", "planning"], ["reform"]],
+            "excluded_keywords": ["consultation"],
+        },
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["search_queries"] == ["housing", "planning", "reform"]
+    assert data["keyword_groups"] == [["housing", "planning"], ["reform"]]
+    assert data["excluded_keywords"] == ["consultation"]
 
 
 @pytest.mark.asyncio
@@ -189,6 +209,30 @@ async def test_update_topic_label_and_queries(client):
     assert data["label"] == "Housing Reform"
     assert data["slug"] == "housing-reform"
     assert data["search_queries"] == ["housing", "planning reform"]
+    assert data["keyword_groups"] == [["housing", "planning reform"]]
+
+
+@pytest.mark.asyncio
+async def test_update_topic_keyword_groups_and_exclusions(client):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Housing", "search_queries": ["housing"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    resp = await client.patch(
+        f"/api/topics/{topic_id}",
+        json={
+            "keyword_groups": [["housing", "planning"], ["reform"]],
+            "excluded_keywords": ["consultation"],
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["search_queries"] == ["housing", "planning", "reform"]
+    assert data["keyword_groups"] == [["housing", "planning"], ["reform"]]
+    assert data["excluded_keywords"] == ["consultation"]
 
 
 @pytest.mark.asyncio

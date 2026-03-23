@@ -17,10 +17,14 @@ export function useCreateTopic() {
     mutationFn: ({
       label,
       searchQueries,
+      keywordGroups,
+      excludedKeywords,
     }: {
       label: string;
-      searchQueries: string[];
-    }) => api.createTopic(label, searchQueries),
+      searchQueries?: string[];
+      keywordGroups?: string[][];
+      excludedKeywords?: string[];
+    }) => api.createTopic(label, { searchQueries, keywordGroups, excludedKeywords }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
     },
@@ -35,12 +39,16 @@ export function useUpdateTopic() {
       topicId,
       label,
       searchQueries,
+      keywordGroups,
+      excludedKeywords,
     }: {
       topicId: number;
       label?: string;
       searchQueries?: string[];
-    }) => api.updateTopic(topicId, { label, searchQueries }),
-    onSuccess: (_data: unknown, variables: { topicId: number; label?: string; searchQueries?: string[] }) => {
+      keywordGroups?: string[][];
+      excludedKeywords?: string[];
+    }) => api.updateTopic(topicId, { label, searchQueries, keywordGroups, excludedKeywords }),
+    onSuccess: (_data: unknown, variables: { topicId: number; label?: string; searchQueries?: string[]; keywordGroups?: string[][]; excludedKeywords?: string[] }) => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
       queryClient.invalidateQueries({ queryKey: ["topic", variables.topicId] });
       queryClient.invalidateQueries({ queryKey: ["actors", variables.topicId] });

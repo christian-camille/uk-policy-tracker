@@ -8,6 +8,7 @@ from app.routers.topics import _slugify
 from app.schemas.entities import EdgeResponse, EntityDetailResponse, NodeResponse
 from app.schemas.timeline import TimelineEvent, TimelineResponse
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
+from app.services.topic_rules import build_topic_keyword_rules, matches_topic_rules
 
 
 class TestSlugify:
@@ -35,6 +36,17 @@ class TestTopicSchemas:
         tc = TopicCreate(label="AI Policy", search_queries=["ai", "machine learning"])
         assert tc.label == "AI Policy"
         assert len(tc.search_queries) == 2
+        assert tc.keyword_groups == [["ai", "machine learning"]]
+
+    def test_topic_create_supports_keyword_groups(self):
+        tc = TopicCreate(
+            label="Planning Reform",
+            keyword_groups=[["housing", "planning"], ["reform"]],
+            excluded_keywords=["consultation"],
+        )
+        assert tc.search_queries == ["housing", "planning", "reform"]
+        assert tc.keyword_groups == [["housing", "planning"], ["reform"]]
+        assert tc.excluded_keywords == ["consultation"]
 
     def test_topic_summary_defaults(self):
         ts = TopicSummary(
@@ -42,6 +54,8 @@ class TestTopicSchemas:
             slug="ai-policy",
             label="AI Policy",
             search_queries=["ai"],
+            keyword_groups=[["ai"]],
+            excluded_keywords=[],
             is_global=True,
             last_refreshed_at=None,
         )
@@ -53,11 +67,29 @@ class TestTopicSchemas:
             slug="test",
             label="Test",
             search_queries=["t"],
+            keyword_groups=[["t"]],
+            excluded_keywords=[],
             is_global=True,
             last_refreshed_at=None,
         )
         tlr = TopicListResponse(topics=[ts])
         assert len(tlr.topics) == 1
+
+
+class TestTopicRules:
+    def test_build_topic_keyword_rules_falls_back_to_legacy_queries(self):
+        rules = build_topic_keyword_rules(search_queries=["housing", "planning"])
+        assert rules.keyword_groups == [["housing", "planning"]]
+        assert rules.search_queries == ["housing", "planning"]
+
+    def test_matches_topic_rules_supports_and_or_not(self):
+        rules = build_topic_keyword_rules(
+            keyword_groups=[["housing", "planning"], ["reform"]],
+            excluded_keywords=["consultation"],
+        )
+        assert matches_topic_rules(rules, "Planning reform white paper") is True
+        assert matches_topic_rules(rules, "Housing consultation response") is False
+        assert matches_topic_rules(rules, "Housing strategy") is False
 
 
 class TestTimelineSchemas:

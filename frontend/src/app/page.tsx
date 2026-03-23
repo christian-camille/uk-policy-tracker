@@ -4,6 +4,7 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { TopicCard } from "@/components/TopicCard";
 import { useCreateTopic, useRefreshAllTopics, useTopics } from "@/hooks/useTopics";
+import { ensureKeywordGroups, parseKeywordList } from "@/lib/topicRules";
 
 export default function WatchlistPage() {
   const { data, isLoading, error } = useTopics();
@@ -11,7 +12,8 @@ export default function WatchlistPage() {
   const refreshAllMutation = useRefreshAllTopics();
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("");
-  const [queries, setQueries] = useState("");
+  const [groupDrafts, setGroupDrafts] = useState<string[]>([""]);
+  const [excludedDraft, setExcludedDraft] = useState("");
 
   const topics = data?.topics ?? [];
 
@@ -21,24 +23,25 @@ export default function WatchlistPage() {
       return;
     }
 
-    const searchQueries = queries
-      .split(",")
-      .map((query) => query.trim())
-      .filter(Boolean);
-
-    if (searchQueries.length === 0) {
-      searchQueries.push(label.trim());
-    }
+    const keywordGroups = ensureKeywordGroups(
+      groupDrafts.map((groupDraft) => parseKeywordList(groupDraft)),
+      label.trim()
+    );
+    const excludedKeywords = parseKeywordList(excludedDraft);
+    const searchQueries = keywordGroups.flat();
 
     createMutation.mutate(
       {
         label: label.trim(),
         searchQueries,
+        keywordGroups,
+        excludedKeywords,
       },
       {
         onSuccess: () => {
           setLabel("");
-          setQueries("");
+          setGroupDrafts([""]);
+          setExcludedDraft("");
           setShowForm(false);
         },
       }
@@ -116,16 +119,56 @@ export default function WatchlistPage() {
               />
             </div>
             <div>
-              <label htmlFor="queries" className="mb-1 block text-sm font-medium text-slate-700">
-                Search queries
-                <span className="ml-1 font-normal text-slate-400">(comma-separated, defaults to topic name)</span>
+              <div className="space-y-3">
+                {groupDrafts.map((groupDraft, index) => (
+                  <div key={`new-group-${index}`}>
+                    <label htmlFor={`queries-${index}`} className="mb-1 block text-sm font-medium text-slate-700">
+                      {index === 0 ? "Match any of these keywords" : `Must also match one of these (${index + 1})`}
+                      <span className="ml-1 font-normal text-slate-400">(comma-separated, defaults to topic name)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={`queries-${index}`}
+                        type="text"
+                        value={groupDraft}
+                        onChange={(event) => {
+                          setGroupDrafts((current) => current.map((value, currentIndex) => currentIndex === index ? event.target.value : value));
+                        }}
+                        placeholder={index === 0 ? 'e.g. "planning reform, local government"' : 'e.g. "zoning, planning bill"'}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-0 transition focus:border-blue-500"
+                      />
+                      {groupDrafts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setGroupDrafts((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setGroupDrafts((current) => [...current, ""])}
+                  className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-100"
+                >
+                  Add AND group
+                </button>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="excluded" className="mb-1 block text-sm font-medium text-slate-700">
+                Must not include
+                <span className="ml-1 font-normal text-slate-400">(comma-separated)</span>
               </label>
               <input
-                id="queries"
+                id="excluded"
                 type="text"
-                value={queries}
-                onChange={(event) => setQueries(event.target.value)}
-                placeholder='e.g. "planning reform, local government"'
+                value={excludedDraft}
+                onChange={(event) => setExcludedDraft(event.target.value)}
+                placeholder='e.g. "consultation, consultation response"'
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-0 transition focus:border-blue-500"
               />
             </div>

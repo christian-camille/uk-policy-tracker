@@ -394,16 +394,38 @@ export default function TopicDetailPage({
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
               {topicData?.label ?? `Topic #${topicId}`}
             </h1>
-            {topicData?.search_queries && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {topicData.search_queries.map((query) => (
-                  <span
-                    key={query}
-                    className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600"
-                  >
-                    {query}
-                  </span>
+            {topicData?.keyword_groups && (
+              <div className="mt-3 space-y-2">
+                {topicData.keyword_groups.map((group, index) => (
+                  <div key={`topic-detail-group-${index}`} className="flex flex-wrap gap-1.5">
+                    <span className="self-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      {index === 0 ? "Any of" : "And one of"}
+                    </span>
+                    {group.map((query) => (
+                      <span
+                        key={`topic-detail-group-${index}-${query}`}
+                        className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600"
+                      >
+                        {query}
+                      </span>
+                    ))}
+                  </div>
                 ))}
+                {topicData.excluded_keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="self-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Exclude
+                    </span>
+                    {topicData.excluded_keywords.map((query) => (
+                      <span
+                        key={`topic-detail-exclude-${query}`}
+                        className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs text-red-700"
+                      >
+                        {query}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -15,6 +15,8 @@ class Topic(Base):
     slug: Mapped[str] = mapped_column(String(128), index=True)
     label: Mapped[str] = mapped_column(String(256))
     search_queries: Mapped[list[str]] = mapped_column(ARRAY(String))
+    keyword_groups: Mapped[list[list[str]] | None] = mapped_column(JSONB, default=None)
+    excluded_keywords: Mapped[list[str] | None] = mapped_column(JSONB, default=None)
     is_global: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_refreshed_at: Mapped[datetime | None] = mapped_column(default=None)

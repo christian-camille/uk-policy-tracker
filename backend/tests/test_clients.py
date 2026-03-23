@@ -91,6 +91,33 @@ class TestGovUkClient:
         assert ids == {"/doc/1", "/doc/2"}
 
     @respx.mock
+    async def test_discover_for_topic_filters_with_keyword_groups_and_exclusions(self):
+        respx.get("https://www.gov.uk/api/search.json").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"_id": "/doc/1", "title": "Planning reform update"},
+                        {"_id": "/doc/2", "title": "Planning consultation response"},
+                        {"_id": "/doc/3", "title": "Housing strategy"},
+                    ],
+                    "total": 3,
+                },
+            )
+        )
+        topic = MagicMock()
+        topic.slug = "planning"
+        topic.search_queries = ["planning", "reform"]
+        topic.keyword_groups = [["housing", "planning"], ["reform"]]
+        topic.excluded_keywords = ["consultation"]
+
+        async with httpx.AsyncClient() as http:
+            client = GovUkClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert [result["_id"] for result in results] == ["/doc/1"]
+
+    @respx.mock
     async def test_discover_handles_http_error(self):
         respx.get("https://www.gov.uk/api/search.json").mock(
             return_value=httpx.Response(500)
@@ -164,6 +191,32 @@ class TestGovUkClientSync:
             results = client.discover_for_topic(topic)
 
         assert results == []
+
+    @respx.mock
+    def test_discover_filters_with_keyword_groups_and_exclusions(self):
+        respx.get("https://www.gov.uk/api/search.json").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"_id": "/doc/1", "title": "Planning reform update"},
+                        {"_id": "/doc/2", "title": "Planning consultation response"},
+                    ],
+                    "total": 2,
+                },
+            )
+        )
+        topic = MagicMock()
+        topic.slug = "planning"
+        topic.search_queries = ["planning", "reform"]
+        topic.keyword_groups = [["planning"], ["reform"]]
+        topic.excluded_keywords = ["consultation"]
+
+        with httpx.Client() as http:
+            client = GovUkClientSync(http)
+            results = client.discover_for_topic(topic)
+
+        assert [result["_id"] for result in results] == ["/doc/1"]
 
 
 # ── Parliament Client (async) ────────────────────────────────────────
@@ -325,6 +378,58 @@ class TestParliamentClient:
         assert len(results["questions"]) == 1
         assert len(results["divisions"]) == 1
         assert results["members"] == []  # Members not directly discovered
+
+    @respx.mock
+    async def test_discover_filters_results_with_keyword_groups_and_exclusions(self):
+        respx.get("https://bills-api.parliament.uk/api/v1/Bills").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {"billId": 10, "shortTitle": "Planning Reform Bill"},
+                        {"billId": 11, "shortTitle": "Planning Consultation Bill"},
+                    ]
+                },
+            )
+        )
+        respx.get(
+            "https://questions-statements-api.parliament.uk/api/writtenquestions/questions"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"value": {"id": 20, "heading": "Planning reform question"}},
+                        {"value": {"id": 21, "heading": "Planning consultation question"}},
+                    ]
+                },
+            )
+        )
+        respx.get(
+            "https://commonsvotes-api.parliament.uk/data/divisions.json/search"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json=[
+                    {"DivisionId": 30, "Title": "Planning reform division"},
+                    {"DivisionId": 31, "Title": "Planning consultation division"},
+                ],
+            )
+        )
+
+        topic = MagicMock()
+        topic.slug = "planning"
+        topic.search_queries = ["planning", "reform"]
+        topic.keyword_groups = [["planning"], ["reform"]]
+        topic.excluded_keywords = ["consultation"]
+
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            results = await client.discover_for_topic(topic)
+
+        assert [bill["billId"] for bill in results["bills"]] == [10]
+        assert [question["id"] for question in results["questions"]] == [20]
+        assert [division["DivisionId"] for division in results["divisions"]] == [30]
 
     @respx.mock
     async def test_discover_deduplicates_across_queries(self):

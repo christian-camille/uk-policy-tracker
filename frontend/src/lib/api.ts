@@ -37,25 +37,41 @@ export const api = {
     );
   },
 
-  createTopic: (label: string, searchQueries: string[]) =>
+  createTopic: (
+    label: string,
+    payload: { searchQueries?: string[]; keywordGroups?: string[][]; excludedKeywords?: string[] }
+  ) =>
     fetchApi<TopicSummary>(`${BFF_URL}/topics`, {
       method: "POST",
       body: JSON.stringify({
         label,
-        search_queries: searchQueries,
+        search_queries: payload.searchQueries,
+        keyword_groups: payload.keywordGroups,
+        excluded_keywords: payload.excludedKeywords,
       }),
     }),
 
   updateTopic: (
     topicId: number,
-    payload: { label?: string; searchQueries?: string[] }
+    payload: { label?: string; searchQueries?: string[]; keywordGroups?: string[][]; excludedKeywords?: string[] }
   ) => {
-    const body: { label?: string; search_queries?: string[] } = {};
+    const body: {
+      label?: string;
+      search_queries?: string[];
+      keyword_groups?: string[][];
+      excluded_keywords?: string[];
+    } = {};
     if (payload.label !== undefined) {
       body.label = payload.label;
     }
     if (payload.searchQueries !== undefined) {
       body.search_queries = payload.searchQueries;
+    }
+    if (payload.keywordGroups !== undefined) {
+      body.keyword_groups = payload.keywordGroups;
+    }
+    if (payload.excludedKeywords !== undefined) {
+      body.excluded_keywords = payload.excludedKeywords;
     }
 
     return fetchApi<TopicSummary>(`${BFF_URL}/topics/${topicId}`, {
