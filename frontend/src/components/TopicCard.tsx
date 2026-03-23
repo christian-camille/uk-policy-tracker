@@ -99,7 +99,7 @@ export function TopicCard({ topic }: { topic: TopicSummary }) {
                   {groupDrafts.map((groupDraft, index) => (
                     <div key={`group-${topic.id}-${index}`}>
                       <label htmlFor={`topic-group-${topic.id}-${index}`} className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                        {index === 0 ? "Match any of these" : `Must also match one of these (${index + 1})`}
+                        {index === 0 ? "Include any of these" : `Require at least one of these (${index + 1})`}
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -131,14 +131,14 @@ export function TopicCard({ topic }: { topic: TopicSummary }) {
                     onClick={() => setGroupDrafts((current) => [...current, ""])}
                     className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-600 transition-colors hover:border-slate-400 hover:bg-slate-50"
                   >
-                    Add AND group
+                    Add required group
                   </button>
                 </div>
               </div>
 
               <div>
                 <label htmlFor={`topic-excluded-${topic.id}`} className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Must not include
+                  Exclude any of these
                 </label>
                 <input
                   id={`topic-excluded-${topic.id}`}
@@ -197,33 +197,37 @@ export function TopicCard({ topic }: { topic: TopicSummary }) {
 
               <div className="mt-3 space-y-2">
                 {topic.keyword_groups.map((group, index) => (
-                  <div key={`${topic.id}-group-${index}`} className="flex flex-wrap gap-1.5">
-                    <span className="self-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                      {index === 0 ? "Any of" : "And one of"}
-                    </span>
-                    {group.map((query) => (
-                      <span
-                        key={`${topic.id}-${index}-${query}`}
-                        className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600"
-                      >
-                        {query}
-                      </span>
-                    ))}
+                  <div key={`${topic.id}-group-${index}`} className="space-y-1">
+                    <p className="text-xs font-medium text-slate-500">
+                      {index === 0 ? "Include any of these:" : "Require at least one of these:"}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.map((query) => (
+                        <span
+                          key={`${topic.id}-${index}-${query}`}
+                          className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600"
+                        >
+                          {query}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ))}
                 {topic.excluded_keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="self-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                      Exclude
-                    </span>
-                    {topic.excluded_keywords.map((query) => (
-                      <span
-                        key={`${topic.id}-exclude-${query}`}
-                        className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs text-red-700"
-                      >
-                        {query}
-                      </span>
-                    ))}
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-500">
+                      Exclude any of these:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {topic.excluded_keywords.map((query) => (
+                        <span
+                          key={`${topic.id}-exclude-${query}`}
+                          className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs text-red-700"
+                        >
+                          {query}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

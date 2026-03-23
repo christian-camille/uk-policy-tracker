@@ -123,7 +123,7 @@ export default function WatchlistPage() {
                 {groupDrafts.map((groupDraft, index) => (
                   <div key={`new-group-${index}`}>
                     <label htmlFor={`queries-${index}`} className="mb-1 block text-sm font-medium text-slate-700">
-                      {index === 0 ? "Match any of these keywords" : `Must also match one of these (${index + 1})`}
+                      {index === 0 ? "Include any of these" : `Require at least one of these (${index + 1})`}
                       <span className="ml-1 font-normal text-slate-400">(comma-separated, defaults to topic name)</span>
                     </label>
                     <div className="flex items-center gap-2">
@@ -154,13 +154,13 @@ export default function WatchlistPage() {
                   onClick={() => setGroupDrafts((current) => [...current, ""])}
                   className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-100"
                 >
-                  Add AND group
+                  Add required group
                 </button>
               </div>
             </div>
             <div>
               <label htmlFor="excluded" className="mb-1 block text-sm font-medium text-slate-700">
-                Must not include
+                Exclude any of these
                 <span className="ml-1 font-normal text-slate-400">(comma-separated)</span>
               </label>
               <input
