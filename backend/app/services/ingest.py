@@ -19,6 +19,7 @@ from app.models.silver import (
     ContentItemTopic,
     Division,
     DivisionTopic,
+    DivisionVote,
     Organisation,
     Person,
     QuestionTopic,
@@ -490,6 +491,25 @@ class IngestService:
                 )
             )
             self.db.flush()
+
+    # ── Parliament: Division Votes ─────────────────────────────────────────
+
+    def upsert_division_vote(
+        self, division_id: int, person_id: int, parliament_member_id: int, vote: str
+    ) -> None:
+        """Upsert a single MP vote record for a division."""
+        stmt = pg_insert(DivisionVote).values(
+            division_id=division_id,
+            person_id=person_id,
+            vote=vote,
+            parliament_member_id=parliament_member_id,
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_division_person_vote",
+            set_={"vote": stmt.excluded.vote},
+        )
+        self.db.execute(stmt)
+        self.db.flush()
 
     # ── Bronze helper ─────────────────────────────────────────────────────
 

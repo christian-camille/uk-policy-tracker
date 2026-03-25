@@ -1,12 +1,12 @@
 "use client";
 
-import { Landmark } from "lucide-react";
+import { Landmark, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/", label: "Topics", icon: Landmark },
-  // Future: { href: "/actors", label: "Actors", icon: Users },
+  { href: "/members", label: "Members", icon: Users },
 ] as const;
 
 export function Header() {
@@ -28,7 +28,7 @@ export function Header() {
         <nav className="flex items-center gap-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}

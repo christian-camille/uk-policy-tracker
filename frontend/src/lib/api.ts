@@ -1,11 +1,16 @@
 import {
   Actor,
   EntityDetail,
+  MemberQuestionsResponse,
+  MemberSearchResponse,
+  MemberVotesResponse,
   RefreshAllTopicsResponse,
   RefreshTopicResponse,
   TimelineQueryParams,
   TimelineResponse,
   TopicSummary,
+  TrackedMemberListResponse,
+  TrackedMemberSummary,
 } from "./types";
 
 const BFF_URL = "/api/bff";
@@ -120,4 +125,59 @@ export const api = {
     fetchApi<RefreshAllTopicsResponse>(`${BFF_URL}/topics/refresh-all`, {
       method: "POST",
     }),
+
+  // ── MP Tracking ──────────────────────────────────────────────────────
+
+  searchMembers: (name: string) =>
+    fetchApi<MemberSearchResponse>(`${BFF_URL}/members/search?name=${encodeURIComponent(name)}`),
+
+  getTrackedMembers: () =>
+    fetchApi<TrackedMemberListResponse>(`${BFF_URL}/members`),
+
+  getMember: (parliamentId: number) =>
+    fetchApi<TrackedMemberSummary>(`${BFF_URL}/members/${parliamentId}`),
+
+  trackMember: (parliamentId: number) =>
+    fetchApi<{ status: string; parliament_id: number; name_display: string }>(
+      `${BFF_URL}/members/${parliamentId}/track`,
+      { method: "POST" }
+    ),
+
+  untrackMember: (parliamentId: number) =>
+    fetchApi<{ status: string; parliament_id: number }>(
+      `${BFF_URL}/members/${parliamentId}/track`,
+      { method: "DELETE" }
+    ),
+
+  getMemberVotes: (parliamentId: number, params?: { limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    return fetchApi<MemberVotesResponse>(
+      `${BFF_URL}/members/${parliamentId}/votes${query ? `?${query}` : ""}`
+    );
+  },
+
+  getMemberQuestions: (parliamentId: number, params?: { limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    return fetchApi<MemberQuestionsResponse>(
+      `${BFF_URL}/members/${parliamentId}/questions${query ? `?${query}` : ""}`
+    );
+  },
+
+  refreshMember: (parliamentId: number) =>
+    fetchApi<{ status: string; parliament_id: number; result: unknown }>(
+      `${BFF_URL}/members/${parliamentId}/refresh`,
+      { method: "POST" }
+    ),
+
+  refreshAllMembers: () =>
+    fetchApi<{ status: string; members: number; results: unknown[] }>(
+      `${BFF_URL}/members/refresh-all`,
+      { method: "POST" }
+    ),
 };

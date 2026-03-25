@@ -145,3 +145,71 @@ export interface RefreshAllTopicsResponse {
   topics: number;
   results: RefreshAllTopicsResult[];
 }
+
+// ── MP Tracking ──────────────────────────────────────────────────────
+
+export interface MemberSearchResult {
+  parliament_id: number;
+  name_display: string;
+  party: string | null;
+  house: string | null;
+  constituency: string | null;
+  thumbnail_url: string | null;
+  is_active: boolean;
+  is_tracked: boolean;
+}
+
+export interface MemberSearchResponse {
+  results: MemberSearchResult[];
+  total: number;
+}
+
+export interface TrackedMemberSummary {
+  parliament_id: number;
+  name_display: string;
+  party: string | null;
+  house: string | null;
+  constituency: string | null;
+  thumbnail_url: string | null;
+  is_active: boolean;
+  last_refreshed_at: string | null;
+  vote_count: number;
+  question_count: number;
+}
+
+export interface TrackedMemberListResponse {
+  members: TrackedMemberSummary[];
+}
+
+export interface MemberVoteRecord {
+  division_id: number;
+  parliament_division_id: number;
+  title: string;
+  date: string;
+  vote: string;
+  aye_count: number;
+  no_count: number;
+}
+
+export interface MemberVotesResponse {
+  parliament_id: number;
+  votes: MemberVoteRecord[];
+  total: number;
+  has_more: boolean;
+}
+
+export interface MemberQuestionRecord {
+  question_id: number;
+  heading: string;
+  date_tabled: string | null;
+  date_answered: string | null;
+  answering_body: string | null;
+  question_text: string | null;
+}
+
+export interface MemberQuestionsResponse {
+  parliament_id: number;
+  questions: MemberQuestionRecord[];
+  total: number;
+  has_more: boolean;
+}

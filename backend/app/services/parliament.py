@@ -135,6 +135,17 @@ class ParliamentClient:
         resp.raise_for_status()
         return _unwrap_member_payload(resp.json())
 
+    async def get_member_voting(
+        self, member_id: int, house: int = 1, skip: int = 0, take: int = 20
+    ) -> dict:
+        """Fetch divisions an MP voted in via the Members API."""
+        params = {"house": house, "skip": skip, "take": take}
+        resp = await self.http.get(
+            f"{MEMBERS_API}/Members/{member_id}/Voting", params=params
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     async def get_question(self, question_id: int) -> dict:
         resp = await self.http.get(
             f"{QUESTIONS_API}/writtenquestions/questions/{question_id}"
@@ -337,6 +348,17 @@ class ParliamentClientSync:
         resp = self.http.get(f"{MEMBERS_API}/Members/{member_id}")
         resp.raise_for_status()
         return _unwrap_member_payload(resp.json())
+
+    def get_member_voting(
+        self, member_id: int, house: int = 1, skip: int = 0, take: int = 20
+    ) -> dict:
+        """Fetch divisions an MP voted in via the Members API."""
+        params = {"house": house, "skip": skip, "take": take}
+        resp = self.http.get(
+            f"{MEMBERS_API}/Members/{member_id}/Voting", params=params
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     def get_question(self, question_id: int) -> dict:
         resp = self.http.get(

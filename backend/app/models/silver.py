@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,6 +65,8 @@ class Person(Base):
     constituency: Mapped[str | None] = mapped_column(String(256))
     thumbnail_url: Mapped[str | None] = mapped_column(String(512))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_tracked: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
 
 
 class Bill(Base):
@@ -212,3 +214,23 @@ class ActivityEvent(Base):
     topic_id: Mapped[int | None] = mapped_column(
         ForeignKey("silver.topics.id"), index=True, default=None
     )
+
+
+class DivisionVote(Base):
+    """Records how an individual MP voted in a division."""
+
+    __tablename__ = "division_votes"
+    __table_args__ = (
+        UniqueConstraint("division_id", "person_id", name="uq_division_person_vote"),
+        {"schema": "silver"},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    division_id: Mapped[int] = mapped_column(
+        ForeignKey("silver.divisions.id"), index=True
+    )
+    person_id: Mapped[int] = mapped_column(
+        ForeignKey("silver.persons.id"), index=True
+    )
+    vote: Mapped[str] = mapped_column(String(16))  # "aye" or "no"
+    parliament_member_id: Mapped[int] = mapped_column(Integer)
