@@ -30,7 +30,7 @@ const PRESET_DAYS = [7, 30, 90];
 
 function pillClass(active: boolean) {
   return active
-    ? "border-slate-900 bg-slate-900 text-white"
+    ? "border-indigo-600 bg-indigo-600 text-white"
     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50";
 }
 
@@ -113,7 +113,7 @@ export function TimelineFilters({
                 <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Search title or summary
                 </span>
-                <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-slate-400">
+                <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-400">
                   <Search className="h-4 w-4 text-slate-400" />
                   <input
                     type="search"
@@ -174,7 +174,7 @@ export function TimelineFilters({
                       type="date"
                       value={since}
                       onChange={(event) => onSinceChange(event.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none"
                     />
                   </label>
                   <label className="block">
@@ -183,7 +183,7 @@ export function TimelineFilters({
                       type="date"
                       value={until}
                       onChange={(event) => onUntilChange(event.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none"
                     />
                   </label>
                 </div>
@@ -212,7 +212,7 @@ export function TimelineFilters({
                   type="checkbox"
                   checked={answeredOnly}
                   onChange={(event) => onAnsweredOnlyChange(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                 />
                 <span>
                   <span className="block font-medium text-slate-900">Only answered questions</span>

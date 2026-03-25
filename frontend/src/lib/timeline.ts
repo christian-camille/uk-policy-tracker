@@ -4,6 +4,7 @@ import type { TimelineEventType, TimelineSourceType } from "./types";
 
 type TimelineEventConfig = {
   color: string;
+  border: string;
   icon: LucideIcon;
   label: string;
 };
@@ -11,26 +12,31 @@ type TimelineEventConfig = {
 export const TIMELINE_EVENT_CONFIG: Record<TimelineEventType, TimelineEventConfig> = {
   govuk_publication: {
     color: "bg-blue-100 text-blue-800",
+    border: "border-l-blue-400",
     icon: FileText,
     label: "GOV.UK Publication",
   },
   bill_stage: {
     color: "bg-rose-100 text-rose-800",
+    border: "border-l-rose-400",
     icon: Gavel,
     label: "Bill Stage",
   },
   question_tabled: {
     color: "bg-amber-100 text-amber-800",
+    border: "border-l-amber-400",
     icon: HelpCircle,
     label: "Question Tabled",
   },
   question_answered: {
     color: "bg-emerald-100 text-emerald-800",
+    border: "border-l-emerald-400",
     icon: CheckCircle,
     label: "Question Answered",
   },
   division_held: {
     color: "bg-red-100 text-red-800",
+    border: "border-l-red-400",
     icon: Vote,
     label: "Division",
   },

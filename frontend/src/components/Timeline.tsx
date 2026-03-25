@@ -33,6 +33,7 @@ export function Timeline({
       {events.map((event) => {
         const config = TIMELINE_EVENT_CONFIG[event.event_type] ?? {
           color: "bg-slate-100 text-slate-800",
+          border: "border-l-slate-300",
           icon: FileText,
           label: event.event_type,
         };
@@ -50,7 +51,7 @@ export function Timeline({
         return (
           <div
             key={event.id}
-            className="flex gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            className={`flex gap-4 rounded-xl border border-slate-200 border-l-[3px] ${config.border} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
           >
             <div className="mt-0.5 shrink-0">
               <Icon className="h-5 w-5 text-slate-400" />
@@ -75,7 +76,7 @@ export function Timeline({
                     href={event.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hover:text-blue-700 hover:underline"
+                    className="hover:text-indigo-700 hover:underline"
                   >
                     {event.title}
                   </a>
@@ -176,7 +177,7 @@ export function Timeline({
               <div className="mt-2">
                 <Link
                   href={`/entities/${event.source_entity_id}?entityType=${encodeURIComponent(event.source_entity_type)}&from=${encodeURIComponent(returnTo)}`}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
                 >
                   View entity details
                 </Link>
