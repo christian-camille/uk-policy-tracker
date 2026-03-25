@@ -1,5 +1,6 @@
 import {
   Actor,
+  DivisionDetail,
   EntityDetail,
   MemberQuestionsResponse,
   MemberSearchResponse,
@@ -168,6 +169,9 @@ export const api = {
       `${BFF_URL}/members/${parliamentId}/questions${query ? `?${query}` : ""}`
     );
   },
+
+  getDivisionDetail: (parliamentDivisionId: number) =>
+    fetchApi<DivisionDetail>(`${BFF_URL}/members/divisions/${parliamentDivisionId}`),
 
   refreshMember: (parliamentId: number) =>
     fetchApi<{ status: string; parliament_id: number; result: unknown }>(

@@ -18,7 +18,7 @@ from app.schemas.members import (
     TrackedMemberSummary,
 )
 from app.services.member_refresh import run_all_member_refreshes, run_member_refresh
-from app.services.parliament import MEMBERS_API
+from app.services.parliament import DIVISIONS_API, MEMBERS_API
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +382,51 @@ async def get_member_questions(
         total=total,
         has_more=(offset + limit) < total,
     )
+
+
+@router.get("/divisions/{parliament_division_id}")
+async def get_division_detail(parliament_division_id: int):
+    """Fetch full division detail from the Commons Divisions API."""
+    async with httpx.AsyncClient(timeout=30) as http:
+        try:
+            resp = await http.get(
+                f"{DIVISIONS_API}/division/{parliament_division_id}.json"
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to fetch division detail: {exc}",
+            ) from exc
+
+    # Summarise party vote breakdown from the Aye/No voter lists
+    def _party_breakdown(voters: list[dict]) -> list[dict]:
+        counts: dict[str, dict] = {}
+        for voter in voters:
+            party = voter.get("Party", "Unknown")
+            abbr = voter.get("PartyAbbreviation", party)
+            colour = voter.get("PartyColour", "888888")
+            if party not in counts:
+                counts[party] = {"party": party, "abbreviation": abbr, "colour": colour, "count": 0}
+            counts[party]["count"] += 1
+        return sorted(counts.values(), key=lambda x: x["count"], reverse=True)
+
+    return {
+        "division_id": data.get("DivisionId"),
+        "title": data.get("Title"),
+        "date": data.get("Date"),
+        "number": data.get("Number"),
+        "aye_count": data.get("AyeCount", 0),
+        "no_count": data.get("NoCount", 0),
+        "is_deferred": data.get("IsDeferred", False),
+        "friendly_description": data.get("FriendlyDescription"),
+        "friendly_title": data.get("FriendlyTitle"),
+        "aye_tellers": data.get("AyeTellers"),
+        "no_tellers": data.get("NoTellers"),
+        "aye_party_breakdown": _party_breakdown(data.get("Ayes", [])),
+        "no_party_breakdown": _party_breakdown(data.get("Noes", [])),
+    }
 
 
 @router.post("/{parliament_id}/refresh")

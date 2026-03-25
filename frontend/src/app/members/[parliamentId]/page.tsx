@@ -1,10 +1,111 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, MessageSquare, RefreshCw, Vote } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink, MessageSquare, RefreshCw, Vote } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useMember, useMemberQuestions, useMemberVotes, useRefreshMember } from "@/hooks/useMembers";
+import { api } from "@/lib/api";
+import type { DivisionDetail, MemberVoteRecord, PartyBreakdown } from "@/lib/types";
+
+function PartyBar({ parties, label }: { parties: PartyBreakdown[]; label: string }) {
+  const total = parties.reduce((sum, p) => sum + p.count, 0);
+  if (total === 0) return null;
+
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium text-slate-600">{label} ({total})</p>
+      <div className="flex h-3 overflow-hidden rounded-full">
+        {parties.map((p) => (
+          <div
+            key={p.party}
+            style={{ width: `${(p.count / total) * 100}%`, backgroundColor: `#${p.colour}` }}
+            title={`${p.party}: ${p.count}`}
+            className="transition-all"
+          />
+        ))}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+        {parties.slice(0, 6).map((p) => (
+          <span key={p.party} className="inline-flex items-center gap-1 text-xs text-slate-500">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: `#${p.colour}` }}
+            />
+            {p.abbreviation} {p.count}
+          </span>
+        ))}
+        {parties.length > 6 && (
+          <span className="text-xs text-slate-400">+{parties.length - 6} more</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VoteDetailPanel({ vote }: { vote: MemberVoteRecord }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["divisionDetail", vote.parliament_division_id],
+    queryFn: () => api.getDivisionDetail(vote.parliament_division_id),
+  });
+
+  const parliamentUrl = `https://votes.parliament.uk/Votes/Commons/Division/${vote.parliament_division_id}`;
+
+  if (isLoading) {
+    return (
+      <div className="px-4 py-4 text-sm text-slate-500">
+        Loading division details...
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="px-4 py-4">
+        <a
+          href={parliamentUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          View on Parliament website
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 px-4 py-4">
+      {data.friendly_description && (
+        <p className="text-sm text-slate-700">{data.friendly_description}</p>
+      )}
+
+      {data.number && (
+        <p className="text-xs text-slate-500">
+          Division No. {data.number}
+          {data.is_deferred && <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">Deferred</span>}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <PartyBar parties={data.aye_party_breakdown} label="Ayes" />
+        <PartyBar parties={data.no_party_breakdown} label="Noes" />
+      </div>
+
+      <a
+        href={parliamentUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800"
+      >
+        View full details on Parliament website
+        <ExternalLink className="h-3.5 w-3.5" />
+      </a>
+    </div>
+  );
+}
 
 export default function MemberDetailPage({
   params,
@@ -17,6 +118,7 @@ export default function MemberDetailPage({
 
   const [votesPage, setVotesPage] = useState(0);
   const [questionsPage, setQuestionsPage] = useState(0);
+  const [expandedVote, setExpandedVote] = useState<number | null>(null);
   const votesPageSize = 25;
   const questionsPageSize = 25;
 
@@ -158,6 +260,7 @@ export default function MemberDetailPage({
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead>
                     <tr className="bg-slate-50">
+                      <th className="w-8 px-2 py-3" />
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                         Date
                       </th>
@@ -173,32 +276,56 @@ export default function MemberDetailPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {votes.map((vote) => (
-                      <tr key={`${vote.division_id}`} className="transition-colors hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                          {format(new Date(vote.date), "d MMM yyyy")}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-900">
-                          {vote.title}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              vote.vote === "aye"
-                                ? "bg-green-50 text-green-700"
-                                : "bg-red-50 text-red-700"
-                            }`}
-                          >
-                            {vote.vote === "aye" ? "Aye" : "No"}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-slate-500">
-                          <span className="text-green-600">{vote.aye_count}</span>
-                          {" / "}
-                          <span className="text-red-600">{vote.no_count}</span>
-                        </td>
-                      </tr>
-                    ))}
+                    {votes.map((vote) => {
+                      const isExpanded = expandedVote === vote.division_id;
+                      return (
+                        <tr
+                          key={vote.division_id}
+                          className="group"
+                        >
+                          <td colSpan={5} className="p-0">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedVote(isExpanded ? null : vote.division_id)}
+                              className="flex w-full items-center transition-colors hover:bg-slate-50"
+                            >
+                              <span className="flex w-8 shrink-0 items-center justify-center px-2 py-3">
+                                <ChevronDown
+                                  className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </span>
+                              <span className="whitespace-nowrap px-4 py-3 text-left text-xs text-slate-500">
+                                {format(new Date(vote.date), "d MMM yyyy")}
+                              </span>
+                              <span className="flex-1 px-4 py-3 text-left text-sm text-slate-900">
+                                {vote.title}
+                              </span>
+                              <span className="whitespace-nowrap px-4 py-3 text-center">
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                    vote.vote === "aye"
+                                      ? "bg-green-50 text-green-700"
+                                      : "bg-red-50 text-red-700"
+                                  }`}
+                                >
+                                  {vote.vote === "aye" ? "Aye" : "No"}
+                                </span>
+                              </span>
+                              <span className="whitespace-nowrap px-4 py-3 text-right text-xs text-slate-500">
+                                <span className="text-green-600">{vote.aye_count}</span>
+                                {" / "}
+                                <span className="text-red-600">{vote.no_count}</span>
+                              </span>
+                            </button>
+                            {isExpanded && (
+                              <div className="border-t border-slate-100 bg-slate-50/50">
+                                <VoteDetailPanel vote={vote} />
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
 
@@ -209,14 +336,14 @@ export default function MemberDetailPage({
                     </p>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setVotesPage((p) => Math.max(0, p - 1))}
+                        onClick={() => { setVotesPage((p) => Math.max(0, p - 1)); setExpandedVote(null); }}
                         disabled={votesPage === 0}
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
                       >
                         Previous
                       </button>
                       <button
-                        onClick={() => setVotesPage((p) => p + 1)}
+                        onClick={() => { setVotesPage((p) => p + 1); setExpandedVote(null); }}
                         disabled={votesPage >= votesTotalPages - 1}
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
                       >

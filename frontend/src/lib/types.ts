@@ -213,3 +213,26 @@ export interface MemberQuestionsResponse {
   total: number;
   has_more: boolean;
 }
+
+export interface PartyBreakdown {
+  party: string;
+  abbreviation: string;
+  colour: string;
+  count: number;
+}
+
+export interface DivisionDetail {
+  division_id: number;
+  title: string;
+  date: string;
+  number: number | null;
+  aye_count: number;
+  no_count: number;
+  is_deferred: boolean;
+  friendly_description: string | null;
+  friendly_title: string | null;
+  aye_tellers: unknown;
+  no_tellers: unknown;
+  aye_party_breakdown: PartyBreakdown[];
+  no_party_breakdown: PartyBreakdown[];
+}
