@@ -201,10 +201,15 @@ export interface MemberVotesResponse {
 export interface MemberQuestionRecord {
   question_id: number;
   heading: string;
+  uin: string | null;
+  house: string | null;
   date_tabled: string | null;
   date_answered: string | null;
   answering_body: string | null;
   question_text: string | null;
+  answer_text: string | null;
+  answer_source_url: string | null;
+  official_url: string | null;
 }
 
 export interface MemberQuestionsResponse {

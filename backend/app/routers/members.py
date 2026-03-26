@@ -18,7 +18,7 @@ from app.schemas.members import (
     TrackedMemberSummary,
 )
 from app.services.member_refresh import run_all_member_refreshes, run_member_refresh
-from app.services.parliament import DIVISIONS_API, MEMBERS_API
+from app.services.parliament import DIVISIONS_API, MEMBERS_API, build_written_question_url
 
 logger = logging.getLogger(__name__)
 
@@ -368,10 +368,15 @@ async def get_member_questions(
         MemberQuestionRecord(
             question_id=q.id,
             heading=q.heading,
+            uin=q.uin,
+            house=q.house,
             date_tabled=q.date_tabled,
             date_answered=q.date_answered,
             answering_body=q.answering_body,
             question_text=q.question_text,
+            answer_text=q.answer_text,
+            answer_source_url=q.answer_source_url,
+            official_url=build_written_question_url(q.date_tabled, q.uin),
         )
         for q in result.scalars()
     ]

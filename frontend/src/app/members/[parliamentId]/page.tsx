@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, ChevronDown, ExternalLink, MessageSquare, RefreshCw, Vote } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, MessageSquare, RefreshCw, Vote } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useMember, useMemberQuestions, useMemberVotes, useRefreshMember } from "@/hooks/useMembers";
@@ -379,25 +379,40 @@ export default function MemberDetailPage({
             {questions.length > 0 && (
               <div className="space-y-3">
                 {questions.map((q) => (
-                  <div key={q.question_id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <p className="text-sm font-medium text-slate-900">{q.heading}</p>
-                    {q.answering_body && (
-                      <p className="mt-1 text-xs text-slate-500">To: {q.answering_body}</p>
-                    )}
-                    <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                      {q.date_tabled && (
-                        <span>Tabled {format(new Date(q.date_tabled), "d MMM yyyy")}</span>
+                  <Link
+                    key={q.question_id}
+                    href={`/entities/${q.question_id}?entityType=question&from=${encodeURIComponent(`/members/${parliamentId}`)}`}
+                    className="group flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        {q.heading}
+                      </p>
+                      {q.answering_body && (
+                        <p className="mt-1 text-xs text-slate-500">To: {q.answering_body}</p>
                       )}
-                      {q.date_answered && (
-                        <>
-                          <span className="text-slate-300">·</span>
-                          <span className="text-green-600">
-                            Answered {format(new Date(q.date_answered), "d MMM yyyy")}
-                          </span>
-                        </>
-                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                        {q.date_tabled && (
+                          <span>Tabled {format(new Date(q.date_tabled), "d MMM yyyy")}</span>
+                        )}
+                        {q.date_answered && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="text-green-600">
+                              Answered {format(new Date(q.date_answered), "d MMM yyyy")}
+                            </span>
+                          </>
+                        )}
+                        {!q.date_answered && !q.answer_text && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="text-amber-600">Awaiting answer</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                  </Link>
                 ))}
 
                 {questionsTotalPages > 1 && (

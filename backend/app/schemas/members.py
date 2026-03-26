@@ -58,10 +58,15 @@ class MemberVotesResponse(BaseModel):
 class MemberQuestionRecord(BaseModel):
     question_id: int
     heading: str
+    uin: str | None = None
+    house: str | None = None
     date_tabled: date | None = None
     date_answered: date | None = None
     answering_body: str | None = None
     question_text: str | None = None
+    answer_text: str | None = None
+    answer_source_url: str | None = None
+    official_url: str | None = None
 
 
 class MemberQuestionsResponse(BaseModel):
