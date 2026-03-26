@@ -2,12 +2,20 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, MessageSquare, RefreshCw, Vote } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, Landmark, MessageSquare, RefreshCw, Vote } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useMember, useMemberQuestions, useMemberVotes, useRefreshMember } from "@/hooks/useMembers";
 import { api } from "@/lib/api";
 import type { DivisionDetail, MemberVoteRecord, PartyBreakdown } from "@/lib/types";
+
+/** Split a division title into bill name + remainder for display. */
+function splitTitle(title: string): { primary: string; secondary: string | null } {
+  const m = title.match(/^(.+?\bBill(?:\s*\((?:Lords|HL)\))?)\s*(.*)/i);
+  if (!m) return { primary: title, secondary: null };
+  const remainder = m[2].replace(/^[:\s]+/, "").trim();
+  return { primary: m[1], secondary: remainder || null };
+}
 
 function PartyBar({ parties, label }: { parties: PartyBreakdown[]; label: string }) {
   const total = parties.reduce((sum, p) => sum + p.count, 0);
@@ -76,10 +84,64 @@ function VoteDetailPanel({ vote }: { vote: MemberVoteRecord }) {
     );
   }
 
+  const bill = data.matched_bill;
+
   return (
     <div className="space-y-4 px-4 py-4">
-      {data.friendly_description && (
-        <p className="text-sm text-slate-700">{data.friendly_description}</p>
+      {/* Bill context */}
+      {bill && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-indigo-700">
+              <Landmark className="h-3 w-3" />
+              Related Bill
+            </span>
+            {bill.is_act && (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                Act of Parliament
+              </span>
+            )}
+            {bill.is_defeated && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                Defeated
+              </span>
+            )}
+            {bill.current_stage && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                {bill.current_stage}
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-medium text-slate-800">{bill.short_title}</p>
+          {bill.long_title && bill.long_title !== bill.short_title && (
+            <p className="mt-1 text-sm text-slate-600">{bill.long_title}</p>
+          )}
+          <a
+            href={bill.bill_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+          >
+            View bill on Parliament
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+
+      {/* Stage and amendment detail */}
+      {(data.division_stage || data.division_detail) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {data.division_stage && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-slate-600">
+              {data.division_stage}
+            </span>
+          )}
+          {data.division_detail && (
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-slate-600">
+              {data.division_detail}
+            </span>
+          )}
+        </div>
       )}
 
       {data.number && (
@@ -297,8 +359,15 @@ export default function MemberDetailPage({
                               <span className="whitespace-nowrap px-4 py-3 text-left text-xs text-slate-500">
                                 {format(new Date(vote.date), "d MMM yyyy")}
                               </span>
-                              <span className="flex-1 px-4 py-3 text-left text-sm text-slate-900">
-                                {vote.title}
+                              <span className="flex-1 px-4 py-3 text-left">
+                                <span className="block text-sm text-slate-900">
+                                  {splitTitle(vote.title).primary}
+                                </span>
+                                {splitTitle(vote.title).secondary && (
+                                  <span className="block text-xs text-slate-400 mt-0.5">
+                                    {splitTitle(vote.title).secondary}
+                                  </span>
+                                )}
                               </span>
                               <span className="whitespace-nowrap px-4 py-3 text-center">
                                 <span

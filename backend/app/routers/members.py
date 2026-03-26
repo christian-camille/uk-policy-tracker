@@ -6,7 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.silver import Division, DivisionVote, Person, WrittenQuestion
+from app.models.bronze import RawParliamentItem
+from app.models.silver import Bill, Division, DivisionVote, Person, WrittenQuestion
+from app.services.division_title_parser import parse_division_title
 from app.schemas.members import (
     MemberQuestionRecord,
     MemberQuestionsResponse,
@@ -390,7 +392,10 @@ async def get_member_questions(
 
 
 @router.get("/divisions/{parliament_division_id}")
-async def get_division_detail(parliament_division_id: int):
+async def get_division_detail(
+    parliament_division_id: int,
+    db: AsyncSession = Depends(get_db),
+):
     """Fetch full division detail from the Commons Divisions API."""
     async with httpx.AsyncClient(timeout=30) as http:
         try:
@@ -417,20 +422,59 @@ async def get_division_detail(parliament_division_id: int):
             counts[party]["count"] += 1
         return sorted(counts.values(), key=lambda x: x["count"], reverse=True)
 
+    # Parse the division title for structured components and bill matching
+    title = data.get("Title", "")
+    parsed = parse_division_title(title)
+
+    matched_bill = None
+    if parsed["bill_name"]:
+        bill = (
+            await db.execute(
+                select(Bill).where(Bill.short_title.ilike(f"%{parsed['bill_name']}%"))
+            )
+        ).scalar_one_or_none()
+
+        if bill:
+            # Try to get longTitle from stored raw JSON
+            long_title = None
+            raw_item = (
+                await db.execute(
+                    select(RawParliamentItem).where(
+                        RawParliamentItem.source_api == "bills",
+                        RawParliamentItem.external_id == str(bill.parliament_bill_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if raw_item and isinstance(raw_item.raw_json, dict):
+                long_title = raw_item.raw_json.get("longTitle")
+
+            matched_bill = {
+                "short_title": bill.short_title,
+                "long_title": long_title,
+                "current_stage": bill.current_stage,
+                "is_act": bill.is_act,
+                "is_defeated": bill.is_defeated,
+                "parliament_bill_id": bill.parliament_bill_id,
+                "bill_url": f"https://bills.parliament.uk/bills/{bill.parliament_bill_id}",
+            }
+
     return {
         "division_id": data.get("DivisionId"),
-        "title": data.get("Title"),
+        "title": title,
         "date": data.get("Date"),
         "number": data.get("Number"),
         "aye_count": data.get("AyeCount", 0),
         "no_count": data.get("NoCount", 0),
         "is_deferred": data.get("IsDeferred", False),
-        "friendly_description": data.get("FriendlyDescription"),
-        "friendly_title": data.get("FriendlyTitle"),
         "aye_tellers": data.get("AyeTellers"),
         "no_tellers": data.get("NoTellers"),
         "aye_party_breakdown": _party_breakdown(data.get("Ayes", [])),
         "no_party_breakdown": _party_breakdown(data.get("Noes", [])),
+        "bill_name": parsed["bill_name"],
+        "division_stage": parsed["stage"],
+        "division_detail": parsed["detail"],
+        "division_category": parsed["category"],
+        "matched_bill": matched_bill,
     }
 
 

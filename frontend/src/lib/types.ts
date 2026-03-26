@@ -226,6 +226,16 @@ export interface PartyBreakdown {
   count: number;
 }
 
+export interface MatchedBill {
+  short_title: string;
+  long_title: string | null;
+  current_stage: string | null;
+  is_act: boolean;
+  is_defeated: boolean;
+  parliament_bill_id: number;
+  bill_url: string;
+}
+
 export interface DivisionDetail {
   division_id: number;
   title: string;
@@ -234,10 +244,13 @@ export interface DivisionDetail {
   aye_count: number;
   no_count: number;
   is_deferred: boolean;
-  friendly_description: string | null;
-  friendly_title: string | null;
   aye_tellers: unknown;
   no_tellers: unknown;
   aye_party_breakdown: PartyBreakdown[];
   no_party_breakdown: PartyBreakdown[];
+  bill_name: string | null;
+  division_stage: string | null;
+  division_detail: string | null;
+  division_category: string;
+  matched_bill: MatchedBill | null;
 }
