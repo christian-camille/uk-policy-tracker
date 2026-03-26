@@ -457,6 +457,41 @@ async def get_division_detail(
                 "parliament_bill_id": bill.parliament_bill_id,
                 "bill_url": f"https://bills.parliament.uk/bills/{bill.parliament_bill_id}",
             }
+        else:
+            # Fallback: search the Bills API directly
+            try:
+                async with httpx.AsyncClient(timeout=15) as bills_http:
+                    search_resp = await bills_http.get(
+                        "https://bills-api.parliament.uk/api/v1/Bills",
+                        params={
+                            "SearchTerm": parsed["bill_name"],
+                            "CurrentHouse": "All",
+                            "OriginatingHouse": "All",
+                        },
+                    )
+                    search_resp.raise_for_status()
+                    results = search_resp.json().get("items", [])
+                    if results:
+                        api_bill = results[0]
+                        bill_id = api_bill.get("billId")
+                        # Fetch full bill detail for longTitle
+                        detail_resp = await bills_http.get(
+                            f"https://bills-api.parliament.uk/api/v1/Bills/{bill_id}"
+                        )
+                        detail_resp.raise_for_status()
+                        full_bill = detail_resp.json()
+                        stage = full_bill.get("currentStage")
+                        matched_bill = {
+                            "short_title": full_bill.get("shortTitle", ""),
+                            "long_title": full_bill.get("longTitle"),
+                            "current_stage": stage.get("description") if isinstance(stage, dict) else None,
+                            "is_act": full_bill.get("isAct", False),
+                            "is_defeated": full_bill.get("isDefeated", False),
+                            "parliament_bill_id": bill_id,
+                            "bill_url": f"https://bills.parliament.uk/bills/{bill_id}",
+                        }
+            except Exception:
+                logger.debug("Bills API fallback failed for %r", parsed["bill_name"])
 
     return {
         "division_id": data.get("DivisionId"),
