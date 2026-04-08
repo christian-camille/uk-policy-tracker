@@ -46,7 +46,7 @@ function MemberSearchPanel() {
   return (
     <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <label htmlFor="member-search" className="mb-2 block text-sm font-medium text-slate-700">
-        Search for an MP or Lord
+        Search for an MP, Lord, or constituency
       </label>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -55,7 +55,7 @@ function MemberSearchPanel() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder='e.g. "Keir Starmer" or "Sunak"'
+          placeholder='e.g. "Keir Starmer", "Sunak", or "Leeds"'
           className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-indigo-500"
         />
       </div>

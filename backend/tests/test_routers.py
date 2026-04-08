@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
+import httpx
 import pytest
+import respx
 
 from app.models.gold import GraphEdge, GraphNode
 from app.models.silver import ActivityEvent, Person, WrittenQuestion
@@ -78,6 +80,96 @@ async def test_health_returns_ok(client):
     assert data["db"] == "connected"
     assert "freshness" in data
     assert "redis" not in data
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_members_merges_name_and_constituency_results(client, async_session):
+    tracked_member = Person(
+        parliament_id=101,
+        name_display="Alex Leeds",
+        party="Labour",
+        house="Commons",
+        constituency="Leeds Central and Headingley",
+        is_tracked=True,
+    )
+    async_session.add(tracked_member)
+    await async_session.commit()
+
+    def search_mock(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        if params.get("Name") == "Leeds":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "value": {
+                                "id": 101,
+                                "nameDisplayAs": "Alex Leeds",
+                                "latestParty": {"name": "Labour"},
+                                "latestHouseMembership": {
+                                    "house": 1,
+                                    "membershipFrom": "Leeds Central and Headingley",
+                                    "membershipStatus": {"statusIsActive": True},
+                                },
+                            }
+                        }
+                    ],
+                    "totalResults": 1,
+                },
+            )
+
+        if params.get("Location") == "Leeds":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "value": {
+                                "id": 101,
+                                "nameDisplayAs": "Alex Leeds",
+                                "latestParty": {"name": "Labour"},
+                                "latestHouseMembership": {
+                                    "house": 1,
+                                    "membershipFrom": "Leeds Central and Headingley",
+                                    "membershipStatus": {"statusIsActive": True},
+                                },
+                            }
+                        },
+                        {
+                            "value": {
+                                "id": 202,
+                                "nameDisplayAs": "Rachel Reeves",
+                                "latestParty": {"name": "Labour"},
+                                "latestHouseMembership": {
+                                    "house": 1,
+                                    "membershipFrom": "Leeds West and Pudsey",
+                                    "membershipStatus": {"statusIsActive": True},
+                                },
+                            }
+                        },
+                    ],
+                    "totalResults": 2,
+                },
+            )
+
+        raise AssertionError(f"Unexpected search params: {dict(params.multi_items())}")
+
+    route = respx.get("https://members-api.parliament.uk/api/Members/Search").mock(
+        side_effect=search_mock
+    )
+
+    resp = await client.get("/api/members/search", params={"name": "Leeds"})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert [member["parliament_id"] for member in data["results"]] == [101, 202]
+    assert data["results"][0]["is_tracked"] is True
+    assert data["results"][1]["constituency"] == "Leeds West and Pudsey"
+    assert route.called
+    assert len(route.calls) == 2
 
 
 @pytest.mark.asyncio

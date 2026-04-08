@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 import httpx
@@ -27,28 +28,90 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/members", tags=["members"])
 
 
+def _extract_member_search_value(item: dict) -> dict:
+    value = item.get("value", item)
+    return value if isinstance(value, dict) else {}
+
+
+def _extract_member_search_id(item: dict) -> int | None:
+    value = _extract_member_search_value(item)
+    mid = value.get("id")
+    return mid if isinstance(mid, int) else None
+
+
+def _build_member_search_result(item: dict, tracked_ids: set[int]) -> MemberSearchResult | None:
+    value = _extract_member_search_value(item)
+    mid = _extract_member_search_id(item)
+    if mid is None:
+        return None
+
+    party_name = None
+    latest_party = value.get("latestParty")
+    if isinstance(latest_party, dict):
+        party_name = latest_party.get("name")
+
+    house_name = None
+    constituency = None
+    is_active = True
+    house_membership = value.get("latestHouseMembership")
+    if isinstance(house_membership, dict):
+        house_int = house_membership.get("house")
+        if house_int == 1:
+            house_name = "Commons"
+        elif house_int == 2:
+            house_name = "Lords"
+        constituency = house_membership.get("membershipFrom")
+        membership_status = house_membership.get("membershipStatus")
+        if isinstance(membership_status, dict):
+            is_active = membership_status.get("statusIsActive", True)
+
+    return MemberSearchResult(
+        parliament_id=mid,
+        name_display=value.get("nameDisplayAs", "Unknown"),
+        party=party_name,
+        house=house_name,
+        constituency=constituency,
+        thumbnail_url=value.get("thumbnailUrl"),
+        is_active=is_active,
+        is_tracked=mid in tracked_ids,
+    )
+
+
 @router.get("/search", response_model=MemberSearchResponse)
 async def search_members(
-    name: str = Query(..., min_length=2, description="Name to search for"),
+    name: str = Query(..., min_length=2, description="Name or constituency to search for"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Search Parliament Members API by name."""
+    """Search Parliament Members API by name and constituency."""
     async with httpx.AsyncClient(timeout=30) as http:
-        params = {"Name": name, "skip": 0, "take": 10}
-        resp = await http.get(f"{MEMBERS_API}/Members/Search", params=params)
-        resp.raise_for_status()
-        data = resp.json()
+        responses = await asyncio.gather(
+            http.get(
+                f"{MEMBERS_API}/Members/Search",
+                params={"Name": name, "skip": 0, "take": 10},
+            ),
+            http.get(
+                f"{MEMBERS_API}/Members/Search",
+                params={"Location": name, "skip": 0, "take": 10},
+            ),
+        )
 
-    items = data.get("items", [])
-    total = data.get("totalResults", len(items))
+    for response in responses:
+        response.raise_for_status()
+
+    items: list[dict] = []
+    seen_member_ids: set[int] = set()
+    for data in (response.json() for response in responses):
+        for item in data.get("items", []):
+            mid = _extract_member_search_id(item)
+            if mid is None or mid in seen_member_ids:
+                continue
+            seen_member_ids.add(mid)
+            items.append(item)
+
+    total = len(items)
 
     # Check which members are already tracked
-    parliament_ids = []
-    for item in items:
-        value = item.get("value", item)
-        mid = value.get("id")
-        if mid:
-            parliament_ids.append(mid)
+    parliament_ids = list(seen_member_ids)
 
     tracked_ids: set[int] = set()
     if parliament_ids:
@@ -62,43 +125,9 @@ async def search_members(
 
     results = []
     for item in items:
-        value = item.get("value", item)
-        mid = value.get("id")
-        if not mid:
-            continue
-
-        party_name = None
-        latest_party = value.get("latestParty")
-        if isinstance(latest_party, dict):
-            party_name = latest_party.get("name")
-
-        house_name = None
-        constituency = None
-        is_active = True
-        house_membership = value.get("latestHouseMembership")
-        if isinstance(house_membership, dict):
-            house_int = house_membership.get("house")
-            if house_int == 1:
-                house_name = "Commons"
-            elif house_int == 2:
-                house_name = "Lords"
-            constituency = house_membership.get("membershipFrom")
-            membership_status = house_membership.get("membershipStatus")
-            if isinstance(membership_status, dict):
-                is_active = membership_status.get("statusIsActive", True)
-
-        results.append(
-            MemberSearchResult(
-                parliament_id=mid,
-                name_display=value.get("nameDisplayAs", "Unknown"),
-                party=party_name,
-                house=house_name,
-                constituency=constituency,
-                thumbnail_url=value.get("thumbnailUrl"),
-                is_active=is_active,
-                is_tracked=mid in tracked_ids,
-            )
-        )
+        result = _build_member_search_result(item, tracked_ids)
+        if result is not None:
+            results.append(result)
 
     return MemberSearchResponse(results=results, total=total)
 

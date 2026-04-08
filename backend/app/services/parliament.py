@@ -121,11 +121,17 @@ class ParliamentClient:
         self.http = http_client
 
     async def search_members(
-        self, name: str | None = None, skip: int = 0, take: int = 20
+        self,
+        name: str | None = None,
+        location: str | None = None,
+        skip: int = 0,
+        take: int = 20,
     ) -> dict:
         params: dict[str, str | int] = {"skip": skip, "take": take}
         if name:
             params["Name"] = name
+        if location:
+            params["Location"] = location
         resp = await self.http.get(f"{MEMBERS_API}/Members/Search", params=params)
         resp.raise_for_status()
         return resp.json()
@@ -335,11 +341,17 @@ class ParliamentClientSync:
         self.http = http_client
 
     def search_members(
-        self, name: str | None = None, skip: int = 0, take: int = 20
+        self,
+        name: str | None = None,
+        location: str | None = None,
+        skip: int = 0,
+        take: int = 20,
     ) -> dict:
         params: dict[str, str | int] = {"skip": skip, "take": take}
         if name:
             params["Name"] = name
+        if location:
+            params["Location"] = location
         resp = self.http.get(f"{MEMBERS_API}/Members/Search", params=params)
         resp.raise_for_status()
         return resp.json()

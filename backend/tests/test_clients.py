@@ -241,7 +241,7 @@ class TestParliamentClient:
 
     @respx.mock
     async def test_search_members(self):
-        respx.get("https://members-api.parliament.uk/api/Members/Search").mock(
+        route = respx.get("https://members-api.parliament.uk/api/Members/Search").mock(
             return_value=httpx.Response(
                 200,
                 json={
@@ -261,6 +261,33 @@ class TestParliamentClient:
             result = await client.search_members(name="John Smith")
 
         assert len(result["items"]) == 1
+        request = route.calls.last.request
+        assert request.url.params["Name"] == "John Smith"
+
+    @respx.mock
+    async def test_search_members_by_location(self):
+        route = respx.get("https://members-api.parliament.uk/api/Members/Search").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "value": {
+                                "id": 999,
+                                "nameDisplayAs": "John Smith",
+                            }
+                        }
+                    ]
+                },
+            )
+        )
+        async with httpx.AsyncClient() as http:
+            client = ParliamentClient(http)
+            result = await client.search_members(location="Leeds")
+
+        assert len(result["items"]) == 1
+        request = route.calls.last.request
+        assert request.url.params["Location"] == "Leeds"
 
     @respx.mock
     async def test_get_member(self):
