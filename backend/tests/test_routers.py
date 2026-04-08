@@ -167,6 +167,8 @@ async def test_search_members_merges_name_and_constituency_results(client, async
     assert data["total"] == 2
     assert [member["parliament_id"] for member in data["results"]] == [101, 202]
     assert data["results"][0]["is_tracked"] is True
+    assert data["results"][0]["match_types"] == ["location", "name"]
+    assert data["results"][1]["match_types"] == ["location"]
     assert data["results"][1]["constituency"] == "Leeds West and Pudsey"
     assert route.called
     assert len(route.calls) == 2

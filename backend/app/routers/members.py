@@ -39,7 +39,11 @@ def _extract_member_search_id(item: dict) -> int | None:
     return mid if isinstance(mid, int) else None
 
 
-def _build_member_search_result(item: dict, tracked_ids: set[int]) -> MemberSearchResult | None:
+def _build_member_search_result(
+    item: dict,
+    tracked_ids: set[int],
+    match_types: set[str],
+) -> MemberSearchResult | None:
     value = _extract_member_search_value(item)
     mid = _extract_member_search_id(item)
     if mid is None:
@@ -74,6 +78,7 @@ def _build_member_search_result(item: dict, tracked_ids: set[int]) -> MemberSear
         thumbnail_url=value.get("thumbnailUrl"),
         is_active=is_active,
         is_tracked=mid in tracked_ids,
+        match_types=sorted(match_types),
     )
 
 
@@ -98,15 +103,19 @@ async def search_members(
     for response in responses:
         response.raise_for_status()
 
-    items: list[dict] = []
-    seen_member_ids: set[int] = set()
-    for data in (response.json() for response in responses):
-        for item in data.get("items", []):
+    items_by_member_id: dict[int, dict] = {}
+    match_types_by_member_id: dict[int, set[str]] = {}
+    search_types = ("name", "location")
+    for search_type, response in zip(search_types, responses, strict=True):
+        for item in response.json().get("items", []):
             mid = _extract_member_search_id(item)
-            if mid is None or mid in seen_member_ids:
+            if mid is None:
                 continue
-            seen_member_ids.add(mid)
-            items.append(item)
+            items_by_member_id.setdefault(mid, item)
+            match_types_by_member_id.setdefault(mid, set()).add(search_type)
+
+    items = list(items_by_member_id.values())
+    seen_member_ids = set(items_by_member_id)
 
     total = len(items)
 
@@ -125,7 +134,14 @@ async def search_members(
 
     results = []
     for item in items:
-        result = _build_member_search_result(item, tracked_ids)
+        mid = _extract_member_search_id(item)
+        if mid is None:
+            continue
+        result = _build_member_search_result(
+            item,
+            tracked_ids,
+            match_types_by_member_id.get(mid, set()),
+        )
         if result is not None:
             results.append(result)
 

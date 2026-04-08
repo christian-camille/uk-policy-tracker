@@ -157,6 +157,7 @@ export interface MemberSearchResult {
   thumbnail_url: string | null;
   is_active: boolean;
   is_tracked: boolean;
+  match_types: string[];
 }
 
 export interface MemberSearchResponse {

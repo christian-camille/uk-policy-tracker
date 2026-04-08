@@ -14,12 +14,85 @@ import {
 import { api } from "@/lib/api";
 import type { MemberSearchResult, TrackedMemberSummary } from "@/lib/types";
 
+function MemberSearchListItem({ member }: { member: MemberSearchResult }) {
+  const trackMutation = useTrackMember();
+
+  return (
+    <li key={member.parliament_id} className="flex items-center justify-between gap-3 py-3">
+      <div className="flex items-center gap-3">
+        {member.thumbnail_url ? (
+          <img
+            src={member.thumbnail_url}
+            alt=""
+            className="h-10 w-10 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
+            {member.name_display.charAt(0)}
+          </span>
+        )}
+        <div>
+          <p className="text-sm font-medium text-slate-900">{member.name_display}</p>
+          <p className="text-xs text-slate-500">
+            {[member.party, member.constituency, member.house].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+      </div>
+      {member.is_tracked ? (
+        <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+          Tracked
+        </span>
+      ) : (
+        <button
+          onClick={() => trackMutation.mutate(member.parliament_id)}
+          disabled={trackMutation.isPending}
+          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+        >
+          Track
+        </button>
+      )}
+    </li>
+  );
+}
+
+function MemberSearchSection({
+  title,
+  description,
+  results,
+}: {
+  title: string;
+  description: string;
+  results: MemberSearchResult[];
+}) {
+  if (results.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-700">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+      </div>
+      <ul className="divide-y divide-slate-100 bg-white px-4">
+        {results.map((member) => (
+          <MemberSearchListItem key={member.parliament_id} member={member} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function MemberSearchPanel() {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<MemberSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const trackMutation = useTrackMember();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const constituencyMatches = results.filter((member) => member.match_types.includes("location"));
+  const nameMatches = results.filter(
+    (member) => member.match_types.includes("name") && !member.match_types.includes("location")
+  );
 
   useEffect(() => {
     if (searchQuery.length < 2) {
@@ -65,44 +138,18 @@ function MemberSearchPanel() {
       )}
 
       {results.length > 0 && (
-        <ul className="mt-3 divide-y divide-slate-100">
-          {results.map((member) => (
-            <li key={member.parliament_id} className="flex items-center justify-between gap-3 py-3">
-              <div className="flex items-center gap-3">
-                {member.thumbnail_url ? (
-                  <img
-                    src={member.thumbnail_url}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
-                    {member.name_display.charAt(0)}
-                  </span>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{member.name_display}</p>
-                  <p className="text-xs text-slate-500">
-                    {[member.party, member.constituency, member.house].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-              </div>
-              {member.is_tracked ? (
-                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
-                  Tracked
-                </span>
-              ) : (
-                <button
-                  onClick={() => trackMutation.mutate(member.parliament_id)}
-                  disabled={trackMutation.isPending}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  Track
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div>
+          <MemberSearchSection
+            title="Constituency Matches"
+            description="MPs returned because the search matches the constituency or area."
+            results={constituencyMatches}
+          />
+          <MemberSearchSection
+            title="Name And Title Matches"
+            description="Members returned because the search matches their name or title."
+            results={nameMatches}
+          />
+        </div>
       )}
 
       {searchQuery.length >= 2 && !isSearching && results.length === 0 && (

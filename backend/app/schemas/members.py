@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MemberSearchResult(BaseModel):
@@ -12,6 +12,7 @@ class MemberSearchResult(BaseModel):
     thumbnail_url: str | None = None
     is_active: bool = True
     is_tracked: bool = False
+    match_types: list[str] = Field(default_factory=list)
 
 
 class MemberSearchResponse(BaseModel):
