@@ -378,16 +378,25 @@ The frontend is a Next.js App Router application that acts as the presentation l
 ### Requirements
 
 - Docker Desktop or Docker Engine with `docker compose`
+- Bash or Zsh for the macOS/Linux commands below
 
 ### 1. Create the environment file
+
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
 ### 2. Build and start the stack
 
-```powershell
+```bash
 docker compose up --build
 ```
 
@@ -408,38 +417,38 @@ docker compose up --build
 
 Start in the background:
 
-```powershell
+```bash
 docker compose up --build -d
 ```
 
 Check running services:
 
-```powershell
+```bash
 docker compose ps
 ```
 
 Stop the stack:
 
-```powershell
+```bash
 docker compose down
 ```
 
 Stop the stack and delete persisted database data:
 
-```powershell
+```bash
 docker compose down -v
 ```
 
 Rebuild one service:
 
-```powershell
+```bash
 docker compose build api
 docker compose build frontend
 ```
 
 View logs:
 
-```powershell
+```bash
 docker compose logs -f api
 docker compose logs -f frontend
 docker compose logs -f postgres
@@ -447,7 +456,7 @@ docker compose logs -f postgres
 
 Run migrations manually with the tools profile:
 
-```powershell
+```bash
 docker compose --profile tools run --rm migrate
 ```
 
@@ -457,7 +466,7 @@ You will need PostgreSQL 16+ running separately and a populated `.env` file.
 
 ### Backend
 
-```powershell
+```bash
 cd backend
 pip install -e ".[dev]"
 python -m spacy download en_core_web_sm
@@ -467,7 +476,7 @@ uvicorn app.main:app --reload --port 8000
 
 ### Frontend
 
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
