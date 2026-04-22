@@ -7,8 +7,17 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.silver import ActivityEvent, Person, Topic, WrittenQuestion
-from app.schemas.timeline import TimelineEvent, TimelineResponse
+from app.models.silver import (
+    ActivityEvent,
+    BillTopic,
+    ContentItemTopic,
+    DivisionTopic,
+    Person,
+    QuestionTopic,
+    Topic,
+    WrittenQuestion,
+)
+from app.schemas.timeline import MatchProvenance, TimelineEvent, TimelineResponse
 from app.services.parliament import build_written_question_url
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary, TopicUpdate
 from app.services.refresh import run_all_topic_refreshes, run_topic_refresh
@@ -60,6 +69,48 @@ async def _load_question_details(
         }
         for row in result
     }
+
+
+async def _load_match_provenance(
+    db: AsyncSession, topic_id: int, events: list[ActivityEvent]
+) -> dict[tuple[str, int], MatchProvenance]:
+    entity_ids_by_type: dict[str, set[int]] = {
+        "content_item": set(),
+        "bill": set(),
+        "question": set(),
+        "division": set(),
+    }
+    for event in events:
+        entity_ids = entity_ids_by_type.get(event.source_entity_type)
+        if entity_ids is not None:
+            entity_ids.add(event.source_entity_id)
+
+    provenance: dict[tuple[str, int], MatchProvenance] = {}
+    query_specs = [
+        ("content_item", ContentItemTopic, ContentItemTopic.content_item_id),
+        ("bill", BillTopic, BillTopic.bill_id),
+        ("question", QuestionTopic, QuestionTopic.question_id),
+        ("division", DivisionTopic, DivisionTopic.division_id),
+    ]
+
+    for source_entity_type, model, entity_column in query_specs:
+        entity_ids = entity_ids_by_type[source_entity_type]
+        if not entity_ids:
+            continue
+
+        stmt = select(model).where(model.topic_id == topic_id, entity_column.in_(entity_ids))
+        result = await db.execute(stmt)
+        for row in result.scalars():
+            provenance[(source_entity_type, getattr(row, entity_column.key))] = MatchProvenance(
+                matched_at=row.matched_at,
+                last_matched_at=row.last_matched_at,
+                match_method=row.match_method,
+                matched_by_query=row.matched_by_query,
+                matched_by_rule_group=row.matched_by_rule_group,
+                refresh_run_id=row.refresh_run_id,
+            )
+
+    return provenance
 
 
 def _parse_iso_datetime(value: str, *, field_name: str, end_of_day: bool = False) -> datetime:
@@ -333,6 +384,7 @@ async def get_topic_timeline(
     result = await db.execute(events_stmt)
     raw_events = list(result.scalars())
     question_details = await _load_question_details(db, raw_events)
+    match_provenance = await _load_match_provenance(db, topic_id, raw_events)
     events = [
         TimelineEvent(
             id=event.id,
@@ -347,6 +399,9 @@ async def get_topic_timeline(
                 question_details.get(event.source_entity_id, {})
                 if event.source_entity_type == "question"
                 else {}
+            ),
+            match_provenance=match_provenance.get(
+                (event.source_entity_type, event.source_entity_id)
             ),
         )
         for event in raw_events
