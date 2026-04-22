@@ -10,7 +10,7 @@ from app.services.topic_rules import (
     compile_candidate_text,
     expand_upstream_queries,
     has_advanced_keyword_rules,
-    matches_topic_rules,
+    matching_keyword_groups,
 )
 
 if TYPE_CHECKING:
@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 GOVUK_BASE = "https://www.gov.uk"
 
 
-def _matches_govuk_topic_rules(topic: Topic, result: dict) -> bool:
+def _matched_govuk_rule_groups(topic: Topic, result: dict) -> list[list[str]] | None:
     rules = build_topic_keyword_rules(
         keyword_groups=getattr(topic, "keyword_groups", None),
         excluded_keywords=getattr(topic, "excluded_keywords", None),
         search_queries=getattr(topic, "search_queries", None),
     )
     if not has_advanced_keyword_rules(rules):
-        return True
+        return [list(group) for group in rules.keyword_groups] or None
     candidate_text = compile_candidate_text(
         result.get("title"),
         result.get("description"),
@@ -36,7 +36,21 @@ def _matches_govuk_topic_rules(topic: Topic, result: dict) -> bool:
         result.get("content_purpose_supergroup"),
         result.get("document_type"),
     )
-    return matches_topic_rules(rules, candidate_text)
+    return matching_keyword_groups(rules, candidate_text)
+
+
+def _build_discovery_result(
+    payload: dict,
+    *,
+    query: str,
+    matched_rule_group: list[list[str]] | None,
+) -> dict:
+    return {
+        "payload": payload,
+        "match_method": "govuk_search",
+        "matched_by_query": query,
+        "matched_by_rule_group": matched_rule_group,
+    }
 
 
 class GovUkClient:
@@ -108,11 +122,18 @@ class GovUkClient:
                 if not results:
                     break
 
-                for r in results:
-                    rid = r.get("_id")
-                    if rid and rid not in seen_ids and _matches_govuk_topic_rules(topic, r):
-                        seen_ids.add(rid)
-                        all_results.append(r)
+                for result in results:
+                    result_id = result.get("_id")
+                    matched_rule_group = _matched_govuk_rule_groups(topic, result)
+                    if result_id and result_id not in seen_ids and matched_rule_group is not None:
+                        seen_ids.add(result_id)
+                        all_results.append(
+                            _build_discovery_result(
+                                result,
+                                query=query,
+                                matched_rule_group=matched_rule_group,
+                            )
+                        )
 
                 total = data.get("total", 0)
                 page += 1
@@ -184,11 +205,18 @@ class GovUkClientSync:
                 if not results:
                     break
 
-                for r in results:
-                    rid = r.get("_id")
-                    if rid and rid not in seen_ids and _matches_govuk_topic_rules(topic, r):
-                        seen_ids.add(rid)
-                        all_results.append(r)
+                for result in results:
+                    result_id = result.get("_id")
+                    matched_rule_group = _matched_govuk_rule_groups(topic, result)
+                    if result_id and result_id not in seen_ids and matched_rule_group is not None:
+                        seen_ids.add(result_id)
+                        all_results.append(
+                            _build_discovery_result(
+                                result,
+                                query=query,
+                                matched_rule_group=matched_rule_group,
+                            )
+                        )
 
                 total = data.get("total", 0)
                 page += 1
