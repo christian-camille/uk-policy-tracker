@@ -122,50 +122,86 @@ class ContentItemTopic(Base):
     """Junction table linking content items to topics they were discovered under."""
 
     __tablename__ = "content_item_topics"
-    __table_args__ = {"schema": "silver"}
+    __table_args__ = (
+        UniqueConstraint("content_item_id", "topic_id", name="uq_content_item_topic"),
+        {"schema": "silver"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     content_item_id: Mapped[int] = mapped_column(
         ForeignKey("silver.content_items.id"), index=True
     )
     topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    last_matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    match_method: Mapped[str | None] = mapped_column(String(64), default=None)
+    matched_by_query: Mapped[str | None] = mapped_column(String(256), default=None)
+    matched_by_rule_group: Mapped[list[list[str]] | None] = mapped_column(JSONB, default=None)
+    refresh_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
 
 
 class BillTopic(Base):
     """Junction table linking Parliament bills to topics they were discovered under."""
 
     __tablename__ = "bill_topics"
-    __table_args__ = {"schema": "silver"}
+    __table_args__ = (
+        UniqueConstraint("bill_id", "topic_id", name="uq_bill_topic"),
+        {"schema": "silver"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     bill_id: Mapped[int] = mapped_column(ForeignKey("silver.bills.id"), index=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    last_matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    match_method: Mapped[str | None] = mapped_column(String(64), default=None)
+    matched_by_query: Mapped[str | None] = mapped_column(String(256), default=None)
+    matched_by_rule_group: Mapped[list[list[str]] | None] = mapped_column(JSONB, default=None)
+    refresh_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
 
 
 class QuestionTopic(Base):
     """Junction table linking written questions to topics they were discovered under."""
 
     __tablename__ = "question_topics"
-    __table_args__ = {"schema": "silver"}
+    __table_args__ = (
+        UniqueConstraint("question_id", "topic_id", name="uq_question_topic"),
+        {"schema": "silver"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     question_id: Mapped[int] = mapped_column(
         ForeignKey("silver.written_questions.id"), index=True
     )
     topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    last_matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    match_method: Mapped[str | None] = mapped_column(String(64), default=None)
+    matched_by_query: Mapped[str | None] = mapped_column(String(256), default=None)
+    matched_by_rule_group: Mapped[list[list[str]] | None] = mapped_column(JSONB, default=None)
+    refresh_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
 
 
 class DivisionTopic(Base):
     """Junction table linking divisions to topics they were discovered under."""
 
     __tablename__ = "division_topics"
-    __table_args__ = {"schema": "silver"}
+    __table_args__ = (
+        UniqueConstraint("division_id", "topic_id", name="uq_division_topic"),
+        {"schema": "silver"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     division_id: Mapped[int] = mapped_column(
         ForeignKey("silver.divisions.id"), index=True
     )
     topic_id: Mapped[int] = mapped_column(ForeignKey("silver.topics.id"), index=True)
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    last_matched_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    match_method: Mapped[str | None] = mapped_column(String(64), default=None)
+    matched_by_query: Mapped[str | None] = mapped_column(String(256), default=None)
+    matched_by_rule_group: Mapped[list[list[str]] | None] = mapped_column(JSONB, default=None)
+    refresh_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
 
 
 class ContentItemOrganisation(Base):
