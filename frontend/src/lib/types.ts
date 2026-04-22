@@ -47,6 +47,16 @@ export interface TimelineEvent {
   question_answer_text?: string | null;
   question_answer_source_url?: string | null;
   question_official_url?: string | null;
+  match_provenance?: MatchProvenance | null;
+}
+
+export interface MatchProvenance {
+  matched_at: string | null;
+  last_matched_at: string | null;
+  match_method: string | null;
+  matched_by_query: string | null;
+  matched_by_rule_group: string[][] | null;
+  refresh_run_id: string | null;
 }
 
 export interface TimelineResponse {
