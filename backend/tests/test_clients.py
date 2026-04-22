@@ -87,7 +87,7 @@ class TestGovUkClient:
 
         # Should deduplicate by _id
         assert len(results) == 2
-        ids = {r["_id"] for r in results}
+        ids = {result["payload"]["_id"] for result in results}
         assert ids == {"/doc/1", "/doc/2"}
 
     @respx.mock
@@ -115,7 +115,9 @@ class TestGovUkClient:
             client = GovUkClient(http)
             results = await client.discover_for_topic(topic)
 
-        assert [result["_id"] for result in results] == ["/doc/1"]
+        assert [result["payload"]["_id"] for result in results] == ["/doc/1"]
+        assert results[0]["matched_by_query"] == "housing"
+        assert results[0]["matched_by_rule_group"] == [["housing", "planning"], ["reform"]]
 
     @respx.mock
     async def test_discover_handles_http_error(self):
@@ -216,7 +218,8 @@ class TestGovUkClientSync:
             client = GovUkClientSync(http)
             results = client.discover_for_topic(topic)
 
-        assert [result["_id"] for result in results] == ["/doc/1"]
+        assert [result["payload"]["_id"] for result in results] == ["/doc/1"]
+        assert results[0]["matched_by_query"] == "planning"
 
 
 # ── Parliament Client (async) ────────────────────────────────────────
@@ -405,6 +408,7 @@ class TestParliamentClient:
         assert len(results["questions"]) == 1
         assert len(results["divisions"]) == 1
         assert results["members"] == []  # Members not directly discovered
+        assert results["bills"][0]["matched_by_query"] == "energy"
 
     @respx.mock
     async def test_discover_filters_results_with_keyword_groups_and_exclusions(self):
@@ -454,9 +458,10 @@ class TestParliamentClient:
             client = ParliamentClient(http)
             results = await client.discover_for_topic(topic)
 
-        assert [bill["billId"] for bill in results["bills"]] == [10]
-        assert [question["id"] for question in results["questions"]] == [20]
-        assert [division["DivisionId"] for division in results["divisions"]] == [30]
+        assert [bill["payload"]["billId"] for bill in results["bills"]] == [10]
+        assert [question["payload"]["id"] for question in results["questions"]] == [20]
+        assert [division["payload"]["DivisionId"] for division in results["divisions"]] == [30]
+        assert results["bills"][0]["matched_by_rule_group"] == [["planning"], ["reform"]]
 
     @respx.mock
     async def test_discover_deduplicates_across_queries(self):
@@ -617,7 +622,7 @@ class TestParliamentClient:
             results = await client.discover_for_topic(topic)
 
         assert detail_route.called
-        assert results["questions"][0]["answerText"] == "<p>Full answer text</p>"
+        assert results["questions"][0]["payload"]["answerText"] == "<p>Full answer text</p>"
 
 
 # ── Parliament Client (sync) ─────────────────────────────────────────
@@ -785,4 +790,4 @@ class TestParliamentClientSync:
             results = client.discover_for_topic(topic)
 
         assert detail_route.called
-        assert results["questions"][0]["answerText"] == "<p>Full answer text</p>"
+        assert results["questions"][0]["payload"]["answerText"] == "<p>Full answer text</p>"

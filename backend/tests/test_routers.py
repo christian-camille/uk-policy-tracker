@@ -10,7 +10,18 @@ import pytest
 import respx
 
 from app.models.gold import GraphEdge, GraphNode
-from app.models.silver import ActivityEvent, Person, WrittenQuestion
+from app.models.silver import (
+    ActivityEvent,
+    Bill,
+    BillTopic,
+    ContentItem,
+    ContentItemTopic,
+    Division,
+    DivisionTopic,
+    Person,
+    QuestionTopic,
+    WrittenQuestion,
+)
 
 
 async def seed_timeline_events(async_session, topic_id: int) -> list[ActivityEvent]:
@@ -535,6 +546,155 @@ async def test_timeline_includes_written_question_details(client, async_session)
     assert event["question_answer_text"].startswith("The Government continues")
     assert event["question_answer_source_url"] == "https://www.gov.uk/example-answer"
     assert event["question_official_url"] == "https://questions-statements.parliament.uk/written-questions/detail/2026-03-10/12345"
+
+
+@pytest.mark.asyncio
+async def test_timeline_includes_match_provenance(client, async_session):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Provenance Topic", "search_queries": ["ai"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    content_item = ContentItem(
+        content_id="doc-1",
+        base_path="/government/doc-1",
+        title="Policy paper update",
+        document_type="policy_paper",
+        description="AI strategy",
+        govuk_url="https://www.gov.uk/government/doc-1",
+    )
+    bill = Bill(
+        parliament_bill_id=900,
+        short_title="AI Regulation Bill",
+        current_house="Commons",
+        is_act=False,
+        is_defeated=False,
+    )
+    question = WrittenQuestion(
+        parliament_question_id=901,
+        uin="901",
+        heading="AI procurement",
+        house="Commons",
+    )
+    division = Division(
+        parliament_division_id=902,
+        title="AI funding division",
+        date=datetime(2026, 4, 10, 12, 0, 0),
+        house="Commons",
+        aye_count=100,
+        no_count=50,
+    )
+    async_session.add_all([content_item, bill, question, division])
+    await async_session.flush()
+
+    async_session.add_all(
+        [
+            ContentItemTopic(
+                content_item_id=content_item.id,
+                topic_id=topic_id,
+                matched_at=datetime(2026, 4, 10, 9, 0, 0),
+                last_matched_at=datetime(2026, 4, 10, 9, 30, 0),
+                match_method="govuk_search",
+                matched_by_query="ai",
+                matched_by_rule_group=[["ai"]],
+                refresh_run_id="refresh-abc",
+            ),
+            BillTopic(
+                bill_id=bill.id,
+                topic_id=topic_id,
+                matched_at=datetime(2026, 4, 10, 10, 0, 0),
+                last_matched_at=datetime(2026, 4, 10, 10, 15, 0),
+                match_method="parliament_search",
+                matched_by_query="artificial intelligence",
+                matched_by_rule_group=[["artificial intelligence"]],
+                refresh_run_id="refresh-abc",
+            ),
+            QuestionTopic(
+                question_id=question.id,
+                topic_id=topic_id,
+                matched_at=datetime(2026, 4, 10, 11, 0, 0),
+                last_matched_at=datetime(2026, 4, 10, 11, 5, 0),
+                match_method="parliament_search",
+                matched_by_query="ai procurement",
+                matched_by_rule_group=[["ai", "procurement"]],
+                refresh_run_id="refresh-abc",
+            ),
+            DivisionTopic(
+                division_id=division.id,
+                topic_id=topic_id,
+                matched_at=datetime(2026, 4, 10, 12, 0, 0),
+                last_matched_at=datetime(2026, 4, 10, 12, 5, 0),
+                match_method="parliament_search",
+                matched_by_query="ai funding",
+                matched_by_rule_group=[["ai", "funding"]],
+                refresh_run_id="refresh-abc",
+            ),
+            ActivityEvent(
+                event_type="govuk_publication",
+                event_date=datetime(2026, 4, 10, 13, 0, 0),
+                title=content_item.title,
+                summary=content_item.description,
+                source_url=content_item.govuk_url,
+                source_entity_type="content_item",
+                source_entity_id=content_item.id,
+                topic_id=topic_id,
+            ),
+            ActivityEvent(
+                event_type="bill_stage",
+                event_date=datetime(2026, 4, 10, 13, 5, 0),
+                title=bill.short_title,
+                summary=None,
+                source_url=None,
+                source_entity_type="bill",
+                source_entity_id=bill.id,
+                topic_id=topic_id,
+            ),
+            ActivityEvent(
+                event_type="question_tabled",
+                event_date=datetime(2026, 4, 10, 13, 10, 0),
+                title=question.heading,
+                summary=None,
+                source_url=None,
+                source_entity_type="question",
+                source_entity_id=question.id,
+                topic_id=topic_id,
+            ),
+            ActivityEvent(
+                event_type="division_held",
+                event_date=datetime(2026, 4, 10, 13, 15, 0),
+                title=division.title,
+                summary=None,
+                source_url=None,
+                source_entity_type="division",
+                source_entity_id=division.id,
+                topic_id=topic_id,
+            ),
+        ]
+    )
+    await async_session.commit()
+
+    resp = await client.get(f"/api/topics/{topic_id}/timeline")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 4
+    methods = {
+        event["source_entity_type"]: event["match_provenance"]["match_method"]
+        for event in data["events"]
+    }
+    assert methods == {
+        "content_item": "govuk_search",
+        "bill": "parliament_search",
+        "question": "parliament_search",
+        "division": "parliament_search",
+    }
+    content_item_event = next(
+        event for event in data["events"] if event["source_entity_type"] == "content_item"
+    )
+    assert content_item_event["match_provenance"]["matched_by_query"] == "ai"
+    assert content_item_event["match_provenance"]["matched_by_rule_group"] == [["ai"]]
+    assert content_item_event["match_provenance"]["refresh_run_id"] == "refresh-abc"
 
 
 @pytest.mark.asyncio

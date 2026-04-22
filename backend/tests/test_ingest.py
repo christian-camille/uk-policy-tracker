@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -23,7 +23,7 @@ from app.models.silver import (
     QuestionTopic,
     WrittenQuestion,
 )
-from app.services.ingest import IngestService, _parse_datetime, _parse_date
+from app.services.ingest import IngestService, TopicMatchProvenance, _parse_datetime, _parse_date
 
 from tests.conftest import make_bill, make_content_item, make_person, make_topic
 
@@ -142,6 +142,39 @@ class TestUpsertGovukContent:
         link = db_session.execute(select(ContentItemTopic)).scalar_one()
         assert link.topic_id == topic.id
 
+    def test_links_to_topic_with_provenance(self, db_session: Session):
+        topic = make_topic(db_session)
+        service = IngestService(db_session)
+        matched_at = datetime(2026, 4, 22, 9, 30, 0)
+        raw = {
+            "_id": "/doc/provenance",
+            "link": "/doc/provenance",
+            "title": "Explainable Doc",
+            "document_type": "news_story",
+        }
+
+        service.upsert_govuk_content(
+            raw,
+            source_query="ai-policy",
+            topic_id=topic.id,
+            provenance=TopicMatchProvenance(
+                match_method="govuk_search",
+                matched_by_query="artificial intelligence",
+                matched_by_rule_group=[["artificial intelligence", "safety"]],
+                refresh_run_id="refresh-001",
+                matched_at=matched_at,
+            ),
+        )
+        db_session.flush()
+
+        link = db_session.execute(select(ContentItemTopic)).scalar_one()
+        assert link.match_method == "govuk_search"
+        assert link.matched_by_query == "artificial intelligence"
+        assert link.matched_by_rule_group == [["artificial intelligence", "safety"]]
+        assert link.refresh_run_id == "refresh-001"
+        assert link.matched_at == matched_at
+        assert link.last_matched_at == matched_at
+
     def test_upserts_organisations(self, db_session: Session):
         service = IngestService(db_session)
         raw = {
@@ -252,6 +285,54 @@ class TestUpsertBill:
 
         assert bill.short_title == "New Title"
         assert bill.is_act is True
+
+    def test_upsert_bill_updates_existing_topic_provenance(self, db_session: Session):
+        topic = make_topic(db_session)
+        service = IngestService(db_session)
+        first_match = datetime(2026, 4, 22, 10, 0, 0)
+        second_match = first_match + timedelta(hours=2)
+        raw = {
+            "billId": 300,
+            "shortTitle": "Traceable Bill",
+            "isAct": False,
+            "isDefeated": False,
+        }
+
+        service.upsert_bill(
+            raw,
+            source_query="ai-policy",
+            topic_id=topic.id,
+            provenance=TopicMatchProvenance(
+                match_method="parliament_search",
+                matched_by_query="ai",
+                matched_by_rule_group=[["ai"]],
+                refresh_run_id="refresh-001",
+                matched_at=first_match,
+            ),
+        )
+        service.upsert_bill(
+            raw,
+            source_query="ai-policy",
+            topic_id=topic.id,
+            provenance=TopicMatchProvenance(
+                match_method="parliament_search",
+                matched_by_query="artificial intelligence",
+                matched_by_rule_group=[["artificial intelligence", "regulation"]],
+                refresh_run_id="refresh-002",
+                matched_at=second_match,
+            ),
+        )
+        db_session.flush()
+
+        links = db_session.execute(select(BillTopic)).scalars().all()
+        assert len(links) == 1
+        link = links[0]
+        assert link.matched_at == first_match
+        assert link.last_matched_at == second_match
+        assert link.match_method == "parliament_search"
+        assert link.matched_by_query == "artificial intelligence"
+        assert link.matched_by_rule_group == [["artificial intelligence", "regulation"]]
+        assert link.refresh_run_id == "refresh-002"
 
 
 # ── Parliament: Questions ────────────────────────────────────────────

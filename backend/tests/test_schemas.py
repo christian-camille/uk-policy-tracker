@@ -6,9 +6,9 @@ from datetime import date, datetime
 
 from app.routers.topics import _slugify
 from app.schemas.entities import EdgeResponse, EntityDetailResponse, NodeResponse
-from app.schemas.timeline import TimelineEvent, TimelineResponse
+from app.schemas.timeline import MatchProvenance, TimelineEvent, TimelineResponse
 from app.schemas.topics import TopicCreate, TopicListResponse, TopicSummary
-from app.services.topic_rules import build_topic_keyword_rules, matches_topic_rules
+from app.services.topic_rules import build_topic_keyword_rules, matches_topic_rules, matching_keyword_groups
 
 
 class TestSlugify:
@@ -91,6 +91,17 @@ class TestTopicRules:
         assert matches_topic_rules(rules, "Housing consultation response") is False
         assert matches_topic_rules(rules, "Housing strategy") is False
 
+    def test_matching_keyword_groups_returns_matching_groups(self):
+        rules = build_topic_keyword_rules(
+            keyword_groups=[["housing", "planning"], ["reform"]],
+            excluded_keywords=["consultation"],
+        )
+
+        assert matching_keyword_groups(rules, "Planning reform white paper") == [
+            ["housing", "planning"],
+            ["reform"],
+        ]
+
 
 class TestTimelineSchemas:
     def test_timeline_event(self):
@@ -110,11 +121,21 @@ class TestTimelineSchemas:
             question_answer_text="The government has published its answer.",
             question_answer_source_url="https://www.gov.uk/example-answer",
             question_official_url="https://questions-statements.parliament.uk/written-questions/detail/2024-01-10/12345",
+            match_provenance=MatchProvenance(
+                matched_at=datetime(2024, 1, 10, 9, 0, 0),
+                last_matched_at=datetime(2024, 1, 15, 12, 0, 0),
+                match_method="govuk_search",
+                matched_by_query="ai",
+                matched_by_rule_group=[["ai"]],
+                refresh_run_id="refresh-123",
+            ),
         )
         assert te.event_type == "govuk_publication"
         assert te.question_uin == "12345"
         assert te.question_answer_source_url == "https://www.gov.uk/example-answer"
         assert te.question_official_url == "https://questions-statements.parliament.uk/written-questions/detail/2024-01-10/12345"
+        assert te.match_provenance is not None
+        assert te.match_provenance.refresh_run_id == "refresh-123"
 
     def test_timeline_event_accepts_question_dates(self):
         te = TimelineEvent(
