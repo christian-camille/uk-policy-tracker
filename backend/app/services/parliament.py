@@ -12,7 +12,7 @@ from app.services.topic_rules import (
     compile_candidate_text,
     expand_upstream_queries,
     has_advanced_keyword_rules,
-    matches_topic_rules,
+    matching_keyword_groups,
 )
 
 if TYPE_CHECKING:
@@ -59,15 +59,15 @@ def _extract_asking_member_ids(questions: list[dict]) -> list[int]:
     return sorted(member_ids)
 
 
-def _matches_bill_topic_rules(topic: Topic, bill: dict) -> bool:
+def _matched_bill_rule_groups(topic: Topic, bill: dict) -> list[list[str]] | None:
     rules = build_topic_keyword_rules(
         keyword_groups=getattr(topic, "keyword_groups", None),
         excluded_keywords=getattr(topic, "excluded_keywords", None),
         search_queries=getattr(topic, "search_queries", None),
     )
     if not has_advanced_keyword_rules(rules):
-        return True
-    return matches_topic_rules(
+        return [list(group) for group in rules.keyword_groups] or None
+    return matching_keyword_groups(
         rules,
         compile_candidate_text(
             bill.get("shortTitle"),
@@ -77,15 +77,15 @@ def _matches_bill_topic_rules(topic: Topic, bill: dict) -> bool:
     )
 
 
-def _matches_question_topic_rules(topic: Topic, question: dict) -> bool:
+def _matched_question_rule_groups(topic: Topic, question: dict) -> list[list[str]] | None:
     rules = build_topic_keyword_rules(
         keyword_groups=getattr(topic, "keyword_groups", None),
         excluded_keywords=getattr(topic, "excluded_keywords", None),
         search_queries=getattr(topic, "search_queries", None),
     )
     if not has_advanced_keyword_rules(rules):
-        return True
-    return matches_topic_rules(
+        return [list(group) for group in rules.keyword_groups] or None
+    return matching_keyword_groups(
         rules,
         compile_candidate_text(
             question.get("heading"),
@@ -96,15 +96,15 @@ def _matches_question_topic_rules(topic: Topic, question: dict) -> bool:
     )
 
 
-def _matches_division_topic_rules(topic: Topic, division: dict) -> bool:
+def _matched_division_rule_groups(topic: Topic, division: dict) -> list[list[str]] | None:
     rules = build_topic_keyword_rules(
         keyword_groups=getattr(topic, "keyword_groups", None),
         excluded_keywords=getattr(topic, "excluded_keywords", None),
         search_queries=getattr(topic, "search_queries", None),
     )
     if not has_advanced_keyword_rules(rules):
-        return True
-    return matches_topic_rules(
+        return [list(group) for group in rules.keyword_groups] or None
+    return matching_keyword_groups(
         rules,
         compile_candidate_text(
             division.get("Title"),
@@ -112,6 +112,21 @@ def _matches_division_topic_rules(topic: Topic, division: dict) -> bool:
             division.get("Date"),
         ),
     )
+
+
+def _build_discovery_result(
+    payload: dict,
+    *,
+    query: str,
+    match_method: str,
+    matched_rule_group: list[list[str]] | None,
+) -> dict:
+    return {
+        "payload": payload,
+        "match_method": match_method,
+        "matched_by_query": query,
+        "matched_by_rule_group": matched_rule_group,
+    }
 
 
 class ParliamentClient:
@@ -214,17 +229,9 @@ class ParliamentClient:
         )
 
         for query in expand_upstream_queries(rules):
-            await self._discover_bills(query, results, seen)
+            await self._discover_bills(topic, query, results, seen)
             await self._discover_questions(topic, query, results, seen)
             await self._discover_divisions(topic, query, results, seen)
-
-        results["bills"] = [bill for bill in results["bills"] if _matches_bill_topic_rules(topic, bill)]
-        results["questions"] = [
-            question for question in results["questions"] if _matches_question_topic_rules(topic, question)
-        ]
-        results["divisions"] = [
-            division for division in results["divisions"] if _matches_division_topic_rules(topic, division)
-        ]
 
         await self._discover_members(results["questions"], results, seen)
 
@@ -239,7 +246,7 @@ class ParliamentClient:
         return results
 
     async def _discover_bills(
-        self, query: str, results: dict[str, list], seen: dict[str, set]
+        self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
     ) -> None:
         try:
             data = await self.search_bills(query, take=50)
@@ -249,9 +256,17 @@ class ParliamentClient:
 
         for item in data.get("items", []):
             bid = item.get("billId")
-            if bid and bid not in seen["bills"]:
+            matched_rule_group = _matched_bill_rule_groups(topic, item)
+            if bid and bid not in seen["bills"] and matched_rule_group is not None:
                 seen["bills"].add(bid)
-                results["bills"].append(item)
+                results["bills"].append(
+                    _build_discovery_result(
+                        item,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     async def _discover_questions(
         self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
@@ -272,8 +287,16 @@ class ParliamentClient:
 
         await self._enrich_questions_with_details(new_questions)
         for record in new_questions:
-            if _matches_question_topic_rules(topic, record):
-                results["questions"].append(record)
+            matched_rule_group = _matched_question_rule_groups(topic, record)
+            if matched_rule_group is not None:
+                results["questions"].append(
+                    _build_discovery_result(
+                        record,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     async def _discover_divisions(
         self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
@@ -288,14 +311,22 @@ class ParliamentClient:
         items = data if isinstance(data, list) else data.get("items", [])
         for item in items:
             did = item.get("DivisionId")
-            if did and did not in seen["divisions"] and _matches_division_topic_rules(topic, item):
+            matched_rule_group = _matched_division_rule_groups(topic, item)
+            if did and did not in seen["divisions"] and matched_rule_group is not None:
                 seen["divisions"].add(did)
-                results["divisions"].append(item)
+                results["divisions"].append(
+                    _build_discovery_result(
+                        item,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     async def _discover_members(
         self, questions: list[dict], results: dict[str, list], seen: dict[str, set]
     ) -> None:
-        for member_id in _extract_asking_member_ids(questions):
+        for member_id in _extract_asking_member_ids([question["payload"] for question in questions]):
             if member_id in seen["members"]:
                 continue
             try:
@@ -429,17 +460,9 @@ class ParliamentClientSync:
         )
 
         for query in expand_upstream_queries(rules):
-            self._discover_bills(query, results, seen)
+            self._discover_bills(topic, query, results, seen)
             self._discover_questions(topic, query, results, seen)
             self._discover_divisions(topic, query, results, seen)
-
-        results["bills"] = [bill for bill in results["bills"] if _matches_bill_topic_rules(topic, bill)]
-        results["questions"] = [
-            question for question in results["questions"] if _matches_question_topic_rules(topic, question)
-        ]
-        results["divisions"] = [
-            division for division in results["divisions"] if _matches_division_topic_rules(topic, division)
-        ]
 
         self._discover_members(results["questions"], results, seen)
 
@@ -454,7 +477,7 @@ class ParliamentClientSync:
         return results
 
     def _discover_bills(
-        self, query: str, results: dict[str, list], seen: dict[str, set]
+        self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
     ) -> None:
         try:
             data = self.search_bills(query, take=50)
@@ -464,9 +487,17 @@ class ParliamentClientSync:
 
         for item in data.get("items", []):
             bid = item.get("billId")
-            if bid and bid not in seen["bills"]:
+            matched_rule_group = _matched_bill_rule_groups(topic, item)
+            if bid and bid not in seen["bills"] and matched_rule_group is not None:
                 seen["bills"].add(bid)
-                results["bills"].append(item)
+                results["bills"].append(
+                    _build_discovery_result(
+                        item,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     def _discover_questions(
         self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
@@ -487,8 +518,16 @@ class ParliamentClientSync:
 
         self._enrich_questions_with_details(new_questions)
         for record in new_questions:
-            if _matches_question_topic_rules(topic, record):
-                results["questions"].append(record)
+            matched_rule_group = _matched_question_rule_groups(topic, record)
+            if matched_rule_group is not None:
+                results["questions"].append(
+                    _build_discovery_result(
+                        record,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     def _discover_divisions(
         self, topic: Topic, query: str, results: dict[str, list], seen: dict[str, set]
@@ -502,14 +541,22 @@ class ParliamentClientSync:
         items = data if isinstance(data, list) else data.get("items", [])
         for item in items:
             did = item.get("DivisionId")
-            if did and did not in seen["divisions"] and _matches_division_topic_rules(topic, item):
+            matched_rule_group = _matched_division_rule_groups(topic, item)
+            if did and did not in seen["divisions"] and matched_rule_group is not None:
                 seen["divisions"].add(did)
-                results["divisions"].append(item)
+                results["divisions"].append(
+                    _build_discovery_result(
+                        item,
+                        query=query,
+                        match_method="parliament_search",
+                        matched_rule_group=matched_rule_group,
+                    )
+                )
 
     def _discover_members(
         self, questions: list[dict], results: dict[str, list], seen: dict[str, set]
     ) -> None:
-        for member_id in _extract_asking_member_ids(questions):
+        for member_id in _extract_asking_member_ids([question["payload"] for question in questions]):
             if member_id in seen["members"]:
                 continue
             try:
