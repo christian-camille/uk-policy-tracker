@@ -125,16 +125,24 @@ def compile_candidate_text(*parts: object) -> str:
 
 
 def matches_topic_rules(rules: TopicKeywordRules, candidate_text: str) -> bool:
+    return matching_keyword_groups(rules, candidate_text) is not None
+
+
+def matching_keyword_groups(
+    rules: TopicKeywordRules, candidate_text: str
+) -> list[list[str]] | None:
     haystack = candidate_text.casefold()
     if not haystack:
         return False
 
     for keyword in rules.excluded_keywords:
         if keyword.casefold() in haystack:
-            return False
+            return None
 
+    matched_groups: list[list[str]] = []
     for group in rules.keyword_groups:
         if not any(keyword.casefold() in haystack for keyword in group):
-            return False
+            return None
+        matched_groups.append(list(group))
 
-    return True
+    return matched_groups
