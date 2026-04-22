@@ -1,13 +1,14 @@
 import logging
 from collections.abc import Callable
 from datetime import datetime
+from uuid import uuid4
 
 import httpx
 
 from app.database import get_sync_session
 from app.models.silver import Topic
 from app.services.govuk import GovUkClientSync
-from app.services.ingest import IngestService
+from app.services.ingest import IngestService, TopicMatchProvenance
 from app.services.parliament import ParliamentClientSync
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,11 @@ def _run_isolated_ingest_step(
     return True
 
 
-def ingest_govuk_for_topic(topic_id: int, allow_private: bool = False):
+def ingest_govuk_for_topic(
+    topic_id: int,
+    allow_private: bool = False,
+    refresh_run_id: str | None = None,
+):
     """Fetch GOV.UK search results for a topic, store in bronze, transform to silver."""
     with get_sync_session() as db:
         topic = db.get(Topic, topic_id)
@@ -53,9 +58,15 @@ def ingest_govuk_for_topic(topic_id: int, allow_private: bool = False):
                 item_label="GOV.UK item",
                 item_identifier=result.get("link") or result.get("_id"),
                 operation=lambda result=result: ingest.upsert_govuk_content(
-                    result,
+                    result["payload"],
                     source_query=topic.slug,
                     topic_id=topic.id,
+                    provenance=TopicMatchProvenance(
+                        match_method=result["match_method"],
+                        matched_by_query=result.get("matched_by_query"),
+                        matched_by_rule_group=result.get("matched_by_rule_group"),
+                        refresh_run_id=refresh_run_id,
+                    ),
                 ),
             )
             if succeeded:
@@ -68,7 +79,11 @@ def ingest_govuk_for_topic(topic_id: int, allow_private: bool = False):
     return {"topic_id": topic_id, "items_ingested": count}
 
 
-def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
+def ingest_parliament_for_topic(
+    topic_id: int,
+    allow_private: bool = False,
+    refresh_run_id: str | None = None,
+):
     """Fetch Parliament bills, questions, divisions for a topic."""
     with get_sync_session() as db:
         topic = db.get(Topic, topic_id)
@@ -90,11 +105,17 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
             succeeded = _run_isolated_ingest_step(
                 db,
                 item_label="bill",
-                item_identifier=bill_data.get("billId"),
+                item_identifier=bill_data["payload"].get("billId"),
                 operation=lambda bill_data=bill_data: ingest.upsert_bill(
-                    bill_data,
+                    bill_data["payload"],
                     source_query=topic.slug,
                     topic_id=topic.id,
+                    provenance=TopicMatchProvenance(
+                        match_method=bill_data["match_method"],
+                        matched_by_query=bill_data.get("matched_by_query"),
+                        matched_by_rule_group=bill_data.get("matched_by_rule_group"),
+                        refresh_run_id=refresh_run_id,
+                    ),
                 ),
             )
             if succeeded:
@@ -117,11 +138,17 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
             succeeded = _run_isolated_ingest_step(
                 db,
                 item_label="question",
-                item_identifier=question_data.get("id"),
+                item_identifier=question_data["payload"].get("id"),
                 operation=lambda question_data=question_data: ingest.upsert_question(
-                    question_data,
+                    question_data["payload"],
                     source_query=topic.slug,
                     topic_id=topic.id,
+                    provenance=TopicMatchProvenance(
+                        match_method=question_data["match_method"],
+                        matched_by_query=question_data.get("matched_by_query"),
+                        matched_by_rule_group=question_data.get("matched_by_rule_group"),
+                        refresh_run_id=refresh_run_id,
+                    ),
                 ),
             )
             if succeeded:
@@ -131,11 +158,17 @@ def ingest_parliament_for_topic(topic_id: int, allow_private: bool = False):
             succeeded = _run_isolated_ingest_step(
                 db,
                 item_label="division",
-                item_identifier=division_data.get("DivisionId"),
+                item_identifier=division_data["payload"].get("DivisionId"),
                 operation=lambda division_data=division_data: ingest.upsert_division(
-                    division_data,
+                    division_data["payload"],
                     source_query=topic.slug,
                     topic_id=topic.id,
+                    provenance=TopicMatchProvenance(
+                        match_method=division_data["match_method"],
+                        matched_by_query=division_data.get("matched_by_query"),
+                        matched_by_rule_group=division_data.get("matched_by_rule_group"),
+                        refresh_run_id=refresh_run_id,
+                    ),
                 ),
             )
             if succeeded:
@@ -188,3 +221,7 @@ def rebuild_graph_projection():
 
     logger.info("Graph projection rebuilt: %s", stats)
     return stats
+
+
+def generate_refresh_run_id() -> str:
+    return uuid4().hex
