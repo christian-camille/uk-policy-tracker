@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete, select
@@ -27,6 +28,15 @@ from app.models.silver import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TopicMatchProvenance:
+    match_method: str
+    matched_by_query: str | None = None
+    matched_by_rule_group: list[list[str]] | None = None
+    refresh_run_id: str | None = None
+    matched_at: datetime | None = None
 
 
 def _normalize_html_text(value: str | None) -> str | None:
@@ -80,7 +90,11 @@ class IngestService:
     # ── GOV.UK ────────────────────────────────────────────────────────────
 
     def upsert_govuk_content(
-        self, raw_json: dict, source_query: str, topic_id: int | None = None
+        self,
+        raw_json: dict,
+        source_query: str,
+        topic_id: int | None = None,
+        provenance: TopicMatchProvenance | None = None,
     ) -> ContentItem:
         """Store raw JSON in bronze, parse into silver.content_items."""
         link = raw_json.get("link", "")
@@ -134,7 +148,7 @@ class IngestService:
 
         # Link to topic
         if topic_id:
-            self._link_content_topic(content_item.id, topic_id)
+            self._link_content_topic(content_item.id, topic_id, provenance=provenance)
 
         return content_item
 
@@ -208,55 +222,115 @@ class IngestService:
                 )
             )
 
-    def _link_content_topic(self, content_item_id: int, topic_id: int) -> None:
+    def _apply_topic_link_provenance(self, link: object, provenance: TopicMatchProvenance) -> None:
+        matched_at = provenance.matched_at or datetime.utcnow()
+        if getattr(link, "matched_at", None) is None:
+            setattr(link, "matched_at", matched_at)
+        setattr(link, "last_matched_at", matched_at)
+        setattr(link, "match_method", provenance.match_method)
+        setattr(link, "matched_by_query", provenance.matched_by_query)
+        setattr(link, "matched_by_rule_group", provenance.matched_by_rule_group)
+        setattr(link, "refresh_run_id", provenance.refresh_run_id)
+
+    def _link_content_topic(
+        self,
+        content_item_id: int,
+        topic_id: int,
+        provenance: TopicMatchProvenance | None = None,
+    ) -> None:
         existing = self.db.execute(
             select(ContentItemTopic).where(
                 ContentItemTopic.content_item_id == content_item_id,
                 ContentItemTopic.topic_id == topic_id,
             )
         ).scalar_one_or_none()
-        if not existing:
-            self.db.add(
-                ContentItemTopic(
-                    content_item_id=content_item_id,
-                    topic_id=topic_id,
-                )
-            )
+        if existing:
+            if provenance:
+                self._apply_topic_link_provenance(existing, provenance)
+            return
 
-    def _link_bill_topic(self, bill_id: int, topic_id: int) -> None:
+        link = ContentItemTopic(
+            content_item_id=content_item_id,
+            topic_id=topic_id,
+        )
+        if provenance:
+            self._apply_topic_link_provenance(link, provenance)
+        self.db.add(link)
+
+    def _link_bill_topic(
+        self,
+        bill_id: int,
+        topic_id: int,
+        provenance: TopicMatchProvenance | None = None,
+    ) -> None:
         existing = self.db.execute(
             select(BillTopic).where(
                 BillTopic.bill_id == bill_id,
                 BillTopic.topic_id == topic_id,
             )
         ).scalar_one_or_none()
-        if not existing:
-            self.db.add(BillTopic(bill_id=bill_id, topic_id=topic_id))
+        if existing:
+            if provenance:
+                self._apply_topic_link_provenance(existing, provenance)
+            return
 
-    def _link_question_topic(self, question_id: int, topic_id: int) -> None:
+        link = BillTopic(bill_id=bill_id, topic_id=topic_id)
+        if provenance:
+            self._apply_topic_link_provenance(link, provenance)
+        self.db.add(link)
+
+    def _link_question_topic(
+        self,
+        question_id: int,
+        topic_id: int,
+        provenance: TopicMatchProvenance | None = None,
+    ) -> None:
         existing = self.db.execute(
             select(QuestionTopic).where(
                 QuestionTopic.question_id == question_id,
                 QuestionTopic.topic_id == topic_id,
             )
         ).scalar_one_or_none()
-        if not existing:
-            self.db.add(QuestionTopic(question_id=question_id, topic_id=topic_id))
+        if existing:
+            if provenance:
+                self._apply_topic_link_provenance(existing, provenance)
+            return
 
-    def _link_division_topic(self, division_id: int, topic_id: int) -> None:
+        link = QuestionTopic(question_id=question_id, topic_id=topic_id)
+        if provenance:
+            self._apply_topic_link_provenance(link, provenance)
+        self.db.add(link)
+
+    def _link_division_topic(
+        self,
+        division_id: int,
+        topic_id: int,
+        provenance: TopicMatchProvenance | None = None,
+    ) -> None:
         existing = self.db.execute(
             select(DivisionTopic).where(
                 DivisionTopic.division_id == division_id,
                 DivisionTopic.topic_id == topic_id,
             )
         ).scalar_one_or_none()
-        if not existing:
-            self.db.add(DivisionTopic(division_id=division_id, topic_id=topic_id))
+        if existing:
+            if provenance:
+                self._apply_topic_link_provenance(existing, provenance)
+            return
+
+        link = DivisionTopic(division_id=division_id, topic_id=topic_id)
+        if provenance:
+            self._apply_topic_link_provenance(link, provenance)
+        self.db.add(link)
 
     # ── Parliament: Bills ─────────────────────────────────────────────────
 
     def upsert_bill(
-        self, raw_json: dict, source_query: str, topic_id: int | None = None
+        self,
+        raw_json: dict,
+        source_query: str,
+        topic_id: int | None = None,
+        provenance: TopicMatchProvenance | None = None,
     ) -> Bill:
         """Store raw JSON in bronze, parse into silver.bills."""
         bill_id = raw_json["billId"]
@@ -299,14 +373,18 @@ class IngestService:
         ).scalar_one()
 
         if topic_id is not None:
-            self._link_bill_topic(bill.id, topic_id)
+            self._link_bill_topic(bill.id, topic_id, provenance=provenance)
 
         return bill
 
     # ── Parliament: Questions ─────────────────────────────────────────────
 
     def upsert_question(
-        self, raw_json: dict, source_query: str, topic_id: int | None = None
+        self,
+        raw_json: dict,
+        source_query: str,
+        topic_id: int | None = None,
+        provenance: TopicMatchProvenance | None = None,
     ) -> WrittenQuestion:
         """Store raw JSON in bronze, parse into silver.written_questions."""
         question_id = raw_json["id"]
@@ -367,14 +445,18 @@ class IngestService:
         ).scalar_one()
 
         if topic_id is not None:
-            self._link_question_topic(question.id, topic_id)
+            self._link_question_topic(question.id, topic_id, provenance=provenance)
 
         return question
 
     # ── Parliament: Divisions ─────────────────────────────────────────────
 
     def upsert_division(
-        self, raw_json: dict, source_query: str, topic_id: int | None = None
+        self,
+        raw_json: dict,
+        source_query: str,
+        topic_id: int | None = None,
+        provenance: TopicMatchProvenance | None = None,
     ) -> Division:
         """Store raw JSON in bronze, parse into silver.divisions."""
         division_id = raw_json["DivisionId"]
@@ -410,7 +492,7 @@ class IngestService:
         ).scalar_one()
 
         if topic_id is not None:
-            self._link_division_topic(division.id, topic_id)
+            self._link_division_topic(division.id, topic_id, provenance=provenance)
 
         return division
 
