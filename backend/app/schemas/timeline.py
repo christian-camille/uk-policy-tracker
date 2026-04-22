@@ -3,6 +3,15 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class MatchProvenance(BaseModel):
+    matched_at: datetime | None = None
+    last_matched_at: datetime | None = None
+    match_method: str | None = None
+    matched_by_query: str | None = None
+    matched_by_rule_group: list[list[str]] | None = None
+    refresh_run_id: str | None = None
+
+
 class TimelineEvent(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -23,6 +32,7 @@ class TimelineEvent(BaseModel):
     question_answer_text: str | None = None
     question_answer_source_url: str | None = None
     question_official_url: str | None = None
+    match_provenance: MatchProvenance | None = None
 
 
 class TimelineResponse(BaseModel):

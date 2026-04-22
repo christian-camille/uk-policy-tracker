@@ -2,6 +2,7 @@ from app.database import get_sync_session
 from app.models.silver import Topic
 from app.tasks.ingest import (
     create_activity_events,
+    generate_refresh_run_id,
     ingest_govuk_for_topic,
     ingest_parliament_for_topic,
     rebuild_graph_projection,
@@ -15,13 +16,16 @@ def run_topic_refresh(topic_id: int) -> dict:
         if not topic:
             raise ValueError(f"Topic {topic_id} not found")
 
-    govuk = ingest_govuk_for_topic(topic_id)
-    parliament = ingest_parliament_for_topic(topic_id)
+    refresh_run_id = generate_refresh_run_id()
+
+    govuk = ingest_govuk_for_topic(topic_id, refresh_run_id=refresh_run_id)
+    parliament = ingest_parliament_for_topic(topic_id, refresh_run_id=refresh_run_id)
     events = create_activity_events(topic_id)
     mentions = run_entity_matching(topic_id)
     graph = rebuild_graph_projection()
 
     return {
+        "refresh_run_id": refresh_run_id,
         "govuk": govuk,
         "parliament": parliament,
         "events": events,
