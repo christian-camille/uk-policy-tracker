@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -449,6 +449,10 @@ async def remove_topic(
 ):
     """Remove a topic from the watchlist."""
     topic = await _get_topic_or_404(db, topic_id)
+
+    for model in (ContentItemTopic, BillTopic, QuestionTopic, DivisionTopic):
+        await db.execute(delete(model).where(model.topic_id == topic_id))
+    await db.execute(delete(ActivityEvent).where(ActivityEvent.topic_id == topic_id))
 
     await db.delete(topic)
     await db.commit()

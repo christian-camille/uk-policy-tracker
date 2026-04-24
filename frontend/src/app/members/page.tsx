@@ -88,15 +88,16 @@ function MemberSearchPanel() {
   const [results, setResults] = useState<MemberSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const visibleResults = searchQuery.length >= 2 ? results : [];
 
-  const constituencyMatches = results.filter((member) => member.match_types.includes("location"));
-  const nameMatches = results.filter(
+  const constituencyMatches = visibleResults.filter((member) => member.match_types.includes("location"));
+  const nameMatches = visibleResults.filter(
     (member) => member.match_types.includes("name") && !member.match_types.includes("location")
   );
 
   useEffect(() => {
     if (searchQuery.length < 2) {
-      setResults([]);
+      clearTimeout(debounceRef.current);
       return;
     }
 
@@ -137,7 +138,7 @@ function MemberSearchPanel() {
         <p className="mt-3 text-sm text-slate-500">Searching...</p>
       )}
 
-      {results.length > 0 && (
+      {visibleResults.length > 0 && (
         <div>
           <MemberSearchSection
             title="Constituency Matches"
@@ -152,7 +153,7 @@ function MemberSearchPanel() {
         </div>
       )}
 
-      {searchQuery.length >= 2 && !isSearching && results.length === 0 && (
+      {searchQuery.length >= 2 && !isSearching && visibleResults.length === 0 && (
         <p className="mt-3 text-sm text-slate-500">No members found for &quot;{searchQuery}&quot;.</p>
       )}
     </div>
