@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Search, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TIMELINE_EVENT_OPTIONS, TIMELINE_SOURCE_OPTIONS } from "@/lib/timeline";
 import { TimelineEventType, TimelineSourceType } from "@/lib/types";
 
@@ -55,6 +55,7 @@ export function TimelineFilters({
   onClear,
 }: TimelineFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const queryDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const activeFilterCount =
     (since ? 1 : 0) +
     (until ? 1 : 0) +
@@ -62,6 +63,17 @@ export function TimelineFilters({
     eventTypes.length +
     sourceEntityTypes.length +
     (answeredOnly ? 1 : 0);
+
+  useEffect(() => {
+    return () => clearTimeout(queryDebounceRef.current);
+  }, []);
+
+  function handleQueryChange(value: string) {
+    clearTimeout(queryDebounceRef.current);
+    queryDebounceRef.current = setTimeout(() => {
+      onQueryChange(value);
+    }, 350);
+  }
 
   return (
     <section className="mb-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
@@ -116,9 +128,10 @@ export function TimelineFilters({
                 <span className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-400">
                   <Search className="h-4 w-4 text-slate-400" />
                   <input
+                    key={query}
                     type="search"
-                    value={query}
-                    onChange={(event) => onQueryChange(event.target.value)}
+                    defaultValue={query}
+                    onChange={(event) => handleQueryChange(event.target.value)}
                     placeholder="Search events"
                     className="w-full border-0 bg-transparent p-0 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0"
                   />
