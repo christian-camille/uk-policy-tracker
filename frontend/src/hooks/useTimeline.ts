@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { TimelineQueryParams } from "@/lib/types";
 
 export function useTimeline(
-  topicId: number,
+  topicId: number | undefined,
   params?: TimelineQueryParams
 ) {
   const eventTypesKey = params?.eventTypes ? [...params.eventTypes].sort().join(",") : null;
@@ -14,7 +14,7 @@ export function useTimeline(
   return useQuery({
     queryKey: [
       "timeline",
-      topicId,
+      topicId ?? null,
       params?.since ?? null,
       params?.until ?? null,
       eventTypesKey,
@@ -23,8 +23,14 @@ export function useTimeline(
       params?.limit ?? null,
       params?.offset ?? null,
     ],
-    queryFn: () => api.getTimeline(topicId, params),
+    queryFn: () => {
+      if (topicId === undefined) {
+        throw new Error("Missing topic id");
+      }
+
+      return api.getTimeline(topicId, params);
+    },
     placeholderData: (previousData) => previousData,
-    enabled: Number.isFinite(topicId),
+    enabled: typeof topicId === "number",
   });
 }
