@@ -142,58 +142,6 @@ export function Timeline({
                 <p className="mt-1 line-clamp-2 text-sm text-slate-500">{event.summary}</p>
               )}
 
-              {showMatchProvenance && (
-                <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/80 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                    Why this matches
-                  </p>
-                  <dl className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-[auto,1fr] sm:gap-x-3">
-                    {matchMethod && (
-                      <>
-                        <dt className="font-medium text-slate-500">Method</dt>
-                        <dd>{matchMethod}</dd>
-                      </>
-                    )}
-                    {event.match_provenance?.matched_by_query && (
-                      <>
-                        <dt className="font-medium text-slate-500">Query</dt>
-                        <dd className="break-words">{event.match_provenance.matched_by_query}</dd>
-                      </>
-                    )}
-                    {matchedRuleGroups && (
-                      <>
-                        <dt className="font-medium text-slate-500">Rule groups</dt>
-                        <dd className="break-words">{matchedRuleGroups}</dd>
-                      </>
-                    )}
-                    {event.match_provenance?.matched_at && (
-                      <>
-                        <dt className="font-medium text-slate-500">First matched</dt>
-                        <dd>
-                          {format(new Date(event.match_provenance.matched_at), "d MMM yyyy")}
-                        </dd>
-                      </>
-                    )}
-                    {event.match_provenance?.last_matched_at && (
-                      <>
-                        <dt className="font-medium text-slate-500">Last seen</dt>
-                        <dd>
-                          {format(new Date(event.match_provenance.last_matched_at), "d MMM yyyy")}
-                        </dd>
-                      </>
-                    )}
-                    {event.match_provenance?.refresh_run_id && (
-                      <>
-                        <dt className="font-medium text-slate-500">Refresh run</dt>
-                        <dd className="font-mono text-xs text-slate-600">
-                          {event.match_provenance.refresh_run_id}
-                        </dd>
-                      </>
-                    )}
-                  </dl>
-                </div>
-              )}
-
               {isQuestionEvent && answerPreview && (
                 <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/70 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -265,6 +213,63 @@ export function Timeline({
                     .filter(Boolean)
                     .join(" • ")}
                 </p>
+              )}
+
+              {showMatchProvenance && (
+                <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2 text-sm text-slate-700">
+                  <summary className="cursor-pointer list-none text-xs font-medium uppercase tracking-[0.18em] text-slate-500 marker:hidden">
+                    <span className="inline-flex items-center gap-2">
+                      <span>Why this matches</span>
+                      <span className="text-[10px] font-semibold normal-case tracking-normal text-slate-400">
+                        Click to expand
+                      </span>
+                    </span>
+                  </summary>
+                  <dl className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-[auto,1fr] sm:gap-x-3">
+                    {matchMethod && (
+                      <>
+                        <dt className="font-medium text-slate-500">Method</dt>
+                        <dd>{matchMethod}</dd>
+                      </>
+                    )}
+                    {event.match_provenance?.matched_by_query && (
+                      <>
+                        <dt className="font-medium text-slate-500">Query</dt>
+                        <dd className="break-words">{event.match_provenance.matched_by_query}</dd>
+                      </>
+                    )}
+                    {matchedRuleGroups && (
+                      <>
+                        <dt className="font-medium text-slate-500">Rule groups</dt>
+                        <dd className="break-words">{matchedRuleGroups}</dd>
+                      </>
+                    )}
+                    {event.match_provenance?.matched_at && (
+                      <>
+                        <dt className="font-medium text-slate-500">First matched</dt>
+                        <dd>
+                          {format(new Date(event.match_provenance.matched_at), "d MMM yyyy")}
+                        </dd>
+                      </>
+                    )}
+                    {event.match_provenance?.last_matched_at && (
+                      <>
+                        <dt className="font-medium text-slate-500">Last seen</dt>
+                        <dd>
+                          {format(new Date(event.match_provenance.last_matched_at), "d MMM yyyy")}
+                        </dd>
+                      </>
+                    )}
+                    {event.match_provenance?.refresh_run_id && (
+                      <>
+                        <dt className="font-medium text-slate-500">Refresh run</dt>
+                        <dd className="font-mono text-xs text-slate-600">
+                          {event.match_provenance.refresh_run_id}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                </details>
               )}
 
               <div className="mt-2">
