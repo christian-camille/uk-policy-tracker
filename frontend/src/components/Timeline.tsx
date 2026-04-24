@@ -8,6 +8,35 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { TimelineEvent } from "@/lib/types";
 import { TIMELINE_EVENT_CONFIG } from "@/lib/timeline";
 
+const MATCH_METHOD_LABELS: Record<string, string> = {
+  govuk_search: "GOV.UK search",
+  parliament_search: "Parliament search",
+};
+
+function formatMatchMethod(matchMethod: string | null | undefined) {
+  if (!matchMethod) {
+    return null;
+  }
+
+  return MATCH_METHOD_LABELS[matchMethod] ?? matchMethod.replaceAll("_", " ");
+}
+
+function formatRuleGroup(group: string[]) {
+  if (group.length <= 1) {
+    return group[0] ?? "";
+  }
+
+  return group.join(" or ");
+}
+
+function formatMatchedRuleGroups(ruleGroups: string[][] | null | undefined) {
+  if (!ruleGroups || ruleGroups.length === 0) {
+    return null;
+  }
+
+  return ruleGroups.map((group) => formatRuleGroup(group)).filter(Boolean).join(" + ");
+}
+
 export function Timeline({
   events,
   emptyMessage,
@@ -44,6 +73,18 @@ export function Timeline({
           event.question_house,
           event.question_uin ? `UIN ${event.question_uin}` : null,
         ].filter(Boolean);
+        const matchMethod = formatMatchMethod(event.match_provenance?.match_method);
+        const matchedRuleGroups = formatMatchedRuleGroups(
+          event.match_provenance?.matched_by_rule_group
+        );
+        const showMatchProvenance = Boolean(
+          matchMethod ||
+            event.match_provenance?.matched_by_query ||
+            matchedRuleGroups ||
+            event.match_provenance?.matched_at ||
+            event.match_provenance?.last_matched_at ||
+            event.match_provenance?.refresh_run_id
+        );
         const answerPreview = event.question_answer_text?.trim();
         const isExpanded = Boolean(expandedAnswers[event.id]);
         const shouldClampAnswer = Boolean(answerPreview) && !isExpanded;
@@ -99,6 +140,58 @@ export function Timeline({
 
               {event.summary && (
                 <p className="mt-1 line-clamp-2 text-sm text-slate-500">{event.summary}</p>
+              )}
+
+              {showMatchProvenance && (
+                <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/80 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                    Why this matches
+                  </p>
+                  <dl className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-[auto,1fr] sm:gap-x-3">
+                    {matchMethod && (
+                      <>
+                        <dt className="font-medium text-slate-500">Method</dt>
+                        <dd>{matchMethod}</dd>
+                      </>
+                    )}
+                    {event.match_provenance?.matched_by_query && (
+                      <>
+                        <dt className="font-medium text-slate-500">Query</dt>
+                        <dd className="break-words">{event.match_provenance.matched_by_query}</dd>
+                      </>
+                    )}
+                    {matchedRuleGroups && (
+                      <>
+                        <dt className="font-medium text-slate-500">Rule groups</dt>
+                        <dd className="break-words">{matchedRuleGroups}</dd>
+                      </>
+                    )}
+                    {event.match_provenance?.matched_at && (
+                      <>
+                        <dt className="font-medium text-slate-500">First matched</dt>
+                        <dd>
+                          {format(new Date(event.match_provenance.matched_at), "d MMM yyyy")}
+                        </dd>
+                      </>
+                    )}
+                    {event.match_provenance?.last_matched_at && (
+                      <>
+                        <dt className="font-medium text-slate-500">Last seen</dt>
+                        <dd>
+                          {format(new Date(event.match_provenance.last_matched_at), "d MMM yyyy")}
+                        </dd>
+                      </>
+                    )}
+                    {event.match_provenance?.refresh_run_id && (
+                      <>
+                        <dt className="font-medium text-slate-500">Refresh run</dt>
+                        <dd className="font-mono text-xs text-slate-600">
+                          {event.match_provenance.refresh_run_id}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                </div>
               )}
 
               {isQuestionEvent && answerPreview && (
