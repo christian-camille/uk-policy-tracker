@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+type RouteContext = {
+  params: Promise<{ path: string[] }>;
+};
+
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const FORWARDED_HEADERS = ["accept", "content-type", "if-none-match"];
 
@@ -26,9 +30,10 @@ function buildForwardHeaders(request: NextRequest): Headers {
 
 async function proxyRequest(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ): Promise<NextResponse> {
-  const target = buildProxyUrl(request, context.params.path);
+  const { path } = await context.params;
+  const target = buildProxyUrl(request, path);
   const headers = buildForwardHeaders(request);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
@@ -62,35 +67,35 @@ async function proxyRequest(
 
 export async function GET(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ) {
   return proxyRequest(request, context);
 }
 
 export async function POST(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ) {
   return proxyRequest(request, context);
 }
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  context: RouteContext
 ) {
   return proxyRequest(request, context);
 }

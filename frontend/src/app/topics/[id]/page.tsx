@@ -5,8 +5,8 @@ import { format, subDays } from "date-fns";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { ReadonlyURLSearchParams } from "next/navigation";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState, useTransition } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useTransition } from "react";
 import { ActorList } from "@/components/ActorList";
 import { Timeline } from "@/components/Timeline";
 import { TimelineFilters } from "@/components/TimelineFilters";
@@ -128,16 +128,14 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
   ];
 }
 
-export default function TopicDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function TopicDetailPage() {
+  const params = useParams<{ id: string }>();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isRoutePending, startRouteTransition] = useTransition();
-  const topicId = Number.parseInt(params.id, 10);
+  const parsedTopicId = Number.parseInt(params.id ?? "", 10);
+  const topicId = Number.isFinite(parsedTopicId) ? parsedTopicId : undefined;
   const refreshMutation = useRefreshTopic();
 
   const since = normalizeDateValue(searchParams.get("since"));
@@ -152,8 +150,6 @@ export default function TopicDetailPage({
     TIMELINE_SOURCE_TYPE_VALUES
   );
   const answeredOnly = searchParams.get("answered") === "1";
-  const [queryDraft, setQueryDraft] = useState(query);
-  const [pageInput, setPageInput] = useState(String(currentPage));
   const activePresetDays = getActivePresetDays(since, until);
   const effectiveEventTypes = answeredOnly ? (["question_answered"] as TimelineEventType[]) : selectedEventTypes;
   const hasActiveFilters =
@@ -244,13 +240,33 @@ export default function TopicDetailPage({
   function handlePageJump(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const parsedPage = Number.parseInt(pageInput, 10);
+    const formData = new FormData(event.currentTarget);
+    const rawPageValue = formData.get("page");
+    const submittedValue = typeof rawPageValue === "string" ? rawPageValue : "";
+
+    if (!submittedValue) {
+      return;
+    }
+
+    const parsedPage = Number.parseInt(submittedValue, 10);
     if (!Number.isFinite(parsedPage)) {
-      setPageInput(String(currentPage));
       return;
     }
 
     setPage(parsedPage);
+  }
+
+  function setQuery(value: string) {
+    const nextQueryValue = value.trim();
+
+    replaceSearchParams((nextParams) => {
+      if (nextQueryValue) {
+        nextParams.set("q", nextQueryValue);
+      } else {
+        nextParams.delete("q");
+      }
+      nextParams.delete("page");
+    });
   }
 
   function toggleEventType(value: TimelineEventType) {
@@ -304,44 +320,11 @@ export default function TopicDetailPage({
     });
   }
 
-  useEffect(() => {
-    setQueryDraft(query);
-  }, [query]);
-
-  useEffect(() => {
-    setPageInput(String(currentPage));
-  }, [currentPage]);
-
-  useEffect(() => {
-    if (queryDraft === query) {
-      return;
-    }
-
-    const handle = window.setTimeout(() => {
-      const nextParams = new URLSearchParams(searchParams.toString());
-      const nextQueryValue = queryDraft.trim();
-
-      if (nextQueryValue) {
-        nextParams.set("q", nextQueryValue);
-      } else {
-        nextParams.delete("q");
-      }
-      nextParams.delete("page");
-
-      const nextQuery = nextParams.toString();
-      startRouteTransition(() => {
-        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-      });
-    }, 350);
-
-    return () => window.clearTimeout(handle);
-  }, [pathname, query, queryDraft, router, searchParams, startRouteTransition]);
-
   const { data: topicData } = useQuery({
-    queryKey: ["topic", topicId],
+    queryKey: ["topic", topicId ?? null],
     queryFn: () =>
       api.getTopics().then((response) => response.topics.find((topic) => topic.id === topicId) ?? null),
-    enabled: Number.isFinite(topicId),
+    enabled: typeof topicId === "number",
   });
 
   const {
@@ -362,9 +345,15 @@ export default function TopicDetailPage({
   }, [currentPage, totalPages]);
 
   const { data: actorsData } = useQuery({
-    queryKey: ["actors", topicId],
-    queryFn: () => api.getActors(topicId),
-    enabled: Number.isFinite(topicId),
+    queryKey: ["actors", topicId ?? null],
+    queryFn: () => {
+      if (topicId === undefined) {
+        throw new Error("Missing topic id");
+      }
+
+      return api.getActors(topicId);
+    },
+    enabled: typeof topicId === "number",
   });
   const actorCount = actorsData?.length ?? 0;
 
@@ -394,7 +383,7 @@ export default function TopicDetailPage({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                {topicData?.label ?? `Topic #${topicId}`}
+                {topicData?.label ?? (topicId !== undefined ? `Topic #${topicId}` : "Topic")}
               </h1>
               {topicData?.keyword_groups && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -415,8 +404,12 @@ export default function TopicDetailPage({
               )}
             </div>
             <button
-              onClick={() => refreshMutation.mutate(topicId)}
-              disabled={refreshMutation.isPending}
+              onClick={() => {
+                if (topicId !== undefined) {
+                  refreshMutation.mutate(topicId);
+                }
+              }}
+              disabled={refreshMutation.isPending || topicId === undefined}
               className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
@@ -467,7 +460,7 @@ export default function TopicDetailPage({
             <TimelineFilters
               since={since}
               until={until}
-              query={queryDraft}
+              query={query}
               eventTypes={selectedEventTypes}
               sourceEntityTypes={selectedSourceTypes}
               answeredOnly={answeredOnly}
@@ -477,7 +470,7 @@ export default function TopicDetailPage({
               isPending={isRoutePending || (isFetching && !timelineLoading)}
               onSinceChange={(value) => setSingleFilter("since", value)}
               onUntilChange={(value) => setSingleFilter("until", value)}
-              onQueryChange={setQueryDraft}
+              onQueryChange={setQuery}
               onEventTypeToggle={toggleEventType}
               onSourceTypeToggle={toggleSourceType}
               onAnsweredOnlyChange={setAnsweredOnly}
@@ -577,12 +570,13 @@ export default function TopicDetailPage({
                         </label>
                         <input
                           id="timeline-page-jump"
+                          name="page"
+                          key={currentPage}
                           type="number"
                           inputMode="numeric"
                           min={1}
                           max={totalPages}
-                          value={pageInput}
-                          onChange={(event) => setPageInput(event.target.value)}
+                          defaultValue={currentPage}
                           className="w-20 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none"
                         />
                         <button
