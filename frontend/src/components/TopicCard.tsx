@@ -1,9 +1,9 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Clock, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Clock, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useDeleteTopic, useRefreshTopic, useUpdateTopic } from "@/hooks/useTopics";
 import { buildInitialGroupDrafts, ensureKeywordGroups, formatKeywordList, parseKeywordList } from "@/lib/topicRules";
 import { TopicSummary } from "@/lib/types";
@@ -18,17 +18,6 @@ export function TopicCard({ topic }: { topic: TopicSummary }) {
   const [groupDrafts, setGroupDrafts] = useState<string[]>(buildInitialGroupDrafts(topic));
   const [excludedDraft, setExcludedDraft] = useState(formatKeywordList(topic.excluded_keywords));
   const [editError, setEditError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isEditing) {
-      return;
-    }
-
-    setLabelDraft(topic.label);
-    setGroupDrafts(buildInitialGroupDrafts(topic));
-    setExcludedDraft(formatKeywordList(topic.excluded_keywords));
-    setEditError(null);
-  }, [isEditing, topic.id, topic.label, topic.search_queries, topic.keyword_groups, topic.excluded_keywords]);
 
   function startEditing() {
     setLabelDraft(topic.label);
