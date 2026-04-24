@@ -8,6 +8,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 import respx
+from sqlalchemy import select
 
 from app.models.gold import GraphEdge, GraphNode
 from app.models.silver import (
@@ -390,6 +391,61 @@ async def test_delete_topic(client):
 
     resp = await client.get(f"/api/topics/{topic_id}")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_topic_removes_topic_links_and_events(client, async_session):
+    create_resp = await client.post(
+        "/api/topics",
+        json={"label": "Transport Links", "search_queries": ["transport"]},
+    )
+    topic_id = create_resp.json()["id"]
+
+    content_item = ContentItem(
+        content_id="govuk-transport-1",
+        base_path="/government/publications/transport-1",
+        title="Transport policy paper",
+        document_type="policy_paper",
+        govuk_url="https://www.gov.uk/government/publications/transport-1",
+    )
+    async_session.add(content_item)
+    await async_session.flush()
+
+    async_session.add(
+        ContentItemTopic(
+            content_item_id=content_item.id,
+            topic_id=topic_id,
+            match_method="search_query",
+            matched_by_query="transport",
+        )
+    )
+    async_session.add(
+        ActivityEvent(
+            event_type="govuk_publication",
+            event_date=datetime(2026, 3, 1, 12, 0, 0),
+            title="Transport update",
+            summary=None,
+            source_url="https://www.gov.uk/government/publications/transport-1",
+            source_entity_type="content_item",
+            source_entity_id=content_item.id,
+            topic_id=topic_id,
+        )
+    )
+    await async_session.commit()
+
+    resp = await client.delete(f"/api/topics/{topic_id}")
+
+    assert resp.status_code == 204
+
+    remaining_links = await async_session.execute(
+        select(ContentItemTopic).where(ContentItemTopic.topic_id == topic_id)
+    )
+    remaining_events = await async_session.execute(
+        select(ActivityEvent).where(ActivityEvent.topic_id == topic_id)
+    )
+
+    assert remaining_links.scalars().all() == []
+    assert remaining_events.scalars().all() == []
 
 
 @pytest.mark.asyncio
