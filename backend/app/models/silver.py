@@ -208,7 +208,14 @@ class ContentItemOrganisation(Base):
     """Junction table linking content items to their publishing organisations."""
 
     __tablename__ = "content_item_organisations"
-    __table_args__ = {"schema": "silver"}
+    __table_args__ = (
+        UniqueConstraint(
+            "content_item_id",
+            "organisation_id",
+            name="uq_content_item_organisation",
+        ),
+        {"schema": "silver"},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     content_item_id: Mapped[int] = mapped_column(

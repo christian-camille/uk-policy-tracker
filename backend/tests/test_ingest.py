@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.bronze import RawGovukItem, RawParliamentItem
@@ -224,6 +225,38 @@ class TestUpsertGovukContent:
 
         org = db_session.execute(select(Organisation)).scalar_one()
         assert org.acronym == long_acronym
+
+    def test_content_item_organisation_links_are_unique_at_db_level(
+        self, db_session: Session
+    ):
+        content_item = make_content_item(db_session)
+        organisation = Organisation(
+            content_id="org-unique-test",
+            title="Department for Testing",
+            acronym="DFT",
+            slug="department-for-testing",
+            state="live",
+        )
+        db_session.add(organisation)
+        db_session.flush()
+
+        db_session.add(
+            ContentItemOrganisation(
+                content_item_id=content_item.id,
+                organisation_id=organisation.id,
+            )
+        )
+        db_session.flush()
+
+        db_session.add(
+            ContentItemOrganisation(
+                content_item_id=content_item.id,
+                organisation_id=organisation.id,
+            )
+        )
+
+        with pytest.raises(IntegrityError):
+            db_session.flush()
 
 
 # ── Parliament: Bills ────────────────────────────────────────────────
