@@ -7,6 +7,7 @@ UK Policy Tracker is a full-stack data product that links GOV.UK publications to
 - Create and manage tracked policy topics with keyword rules and exclusions
 - Pull matching publications from GOV.UK and parliamentary activity from multiple Parliament APIs
 - Materialise topic timelines spanning publications, bills, written questions, and divisions
+- Explain why a publication, bill, question, or division matches a topic through stored match provenance
 - Track MPs and inspect their votes and written questions independently of topic tracking
 - Identify key actors connected to a topic through entity extraction and graph projection
 - Explore graph nodes and first-hop relationships through entity detail pages
@@ -168,12 +169,16 @@ The silver layer is the canonical relational model used by the API and the pipel
 
 | Table | Role |
 | --- | --- |
-| `silver.content_item_topics` | Links GOV.UK content to topics |
-| `silver.bill_topics` | Links bills to topics |
-| `silver.question_topics` | Links written questions to topics |
-| `silver.division_topics` | Links divisions to topics |
+| `silver.content_item_topics` | Links GOV.UK content to topics and stores match provenance such as match timestamps, query, rule groups, method, and refresh run |
+| `silver.bill_topics` | Links bills to topics and stores match provenance such as match timestamps, query, rule groups, method, and refresh run |
+| `silver.question_topics` | Links written questions to topics and stores match provenance such as match timestamps, query, rule groups, method, and refresh run |
+| `silver.division_topics` | Links divisions to topics and stores match provenance such as match timestamps, query, rule groups, method, and refresh run |
 | `silver.content_item_organisations` | Links publications to publishing organisations |
 | `silver.entity_mentions` | Stores resolved NLP entity mentions extracted from GOV.UK content |
+
+Association tables that model many-to-many links are hardened with composite uniqueness constraints so duplicate topic or publishing-organisation links cannot accumulate silently.
+
+Topic association rows now also act as the source of truth for match provenance, which means the system can answer not just whether an entity matches a topic, but why it matched and when it was last observed during refresh.
 
 Why it matters:
 
@@ -337,6 +342,7 @@ The frontend is a Next.js App Router application that acts as the presentation l
 
 - Filter by date range, event type, source entity type, and search text
 - Page through events without forcing the UI to understand source-table complexity
+- Expand per-event match provenance in the topic timeline to inspect the triggering query, matched rule groups, method, and refresh run
 
 #### Entity exploration
 
@@ -517,6 +523,8 @@ Notable migrations in the repository show how the schema evolved as the product 
 - question answer storage
 - keyword rule support on topics
 - tracked-member support for MP workflows
+- association-table uniqueness hardening for publishing-organisation links
+- topic-association provenance columns and uniqueness constraints for explainable topic matching
 
 Because the API container runs `alembic upgrade head` on startup, the default Docker path applies migrations automatically.
 
