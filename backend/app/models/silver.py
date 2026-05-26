@@ -96,9 +96,6 @@ class WrittenQuestion(Base):
     house: Mapped[str] = mapped_column(String(16))
     date_tabled: Mapped[date | None] = mapped_column(Date, default=None)
     date_answered: Mapped[date | None] = mapped_column(Date, default=None)
-    asking_member_id: Mapped[int | None] = mapped_column(
-        ForeignKey("silver.persons.parliament_id"), default=None
-    )
     asking_person_id: Mapped[int | None] = mapped_column(
         ForeignKey("silver.persons.id"), default=None
     )
