@@ -1,11 +1,3 @@
-"""Add internal person linkage for written questions.
-
-Revision ID: 011_question_asking_person_fk
-Revises: 010_content_item_organisation_uniqueness
-Create Date: 2026-05-25
-
-"""
-
 from typing import Sequence, Union
 
 import sqlalchemy as sa

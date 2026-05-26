@@ -99,6 +99,12 @@ class WrittenQuestion(Base):
     asking_member_id: Mapped[int | None] = mapped_column(
         ForeignKey("silver.persons.parliament_id"), default=None
     )
+    asking_person_id: Mapped[int | None] = mapped_column(
+        ForeignKey("silver.persons.id"), default=None
+    )
+    asking_member_parliament_id: Mapped[int | None] = mapped_column(
+        Integer, default=None
+    )
     answering_body: Mapped[str | None] = mapped_column(String(256))
     answer_text: Mapped[str | None] = mapped_column(Text)
     answer_source_url: Mapped[str | None] = mapped_column(String(512))

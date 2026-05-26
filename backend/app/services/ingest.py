@@ -396,8 +396,10 @@ class IngestService:
 
         # Upsert asking member if present
         asking_member_id = raw_json.get("askingMemberId")
+        asking_person_id = None
         if asking_member_id:
-            self._ensure_member_stub(asking_member_id)
+            asking_person = self._ensure_member_stub(asking_member_id)
+            asking_person_id = asking_person.id
 
         # Determine house: API returns int (1=Commons, 2=Lords) or string
         house_raw = raw_json.get("house", "")
@@ -416,6 +418,8 @@ class IngestService:
             date_tabled=_parse_date(raw_json.get("dateTabled")),
             date_answered=_parse_date(raw_json.get("dateAnswered")),
             asking_member_id=asking_member_id,
+            asking_person_id=asking_person_id,
+            asking_member_parliament_id=asking_member_id,
             answering_body=raw_json.get("answeringBodyName"),
             answer_text=_normalize_html_text(raw_json.get("answerText")),
             answer_source_url=_extract_first_url(raw_json.get("answerText")),
@@ -430,6 +434,8 @@ class IngestService:
                 "date_tabled": stmt.excluded.date_tabled,
                 "date_answered": stmt.excluded.date_answered,
                 "asking_member_id": stmt.excluded.asking_member_id,
+                "asking_person_id": stmt.excluded.asking_person_id,
+                "asking_member_parliament_id": stmt.excluded.asking_member_parliament_id,
                 "answering_body": stmt.excluded.answering_body,
                 "answer_text": stmt.excluded.answer_text,
                 "answer_source_url": stmt.excluded.answer_source_url,
@@ -559,20 +565,22 @@ class IngestService:
             select(Person).where(Person.parliament_id == member_id)
         ).scalar_one()
 
-    def _ensure_member_stub(self, parliament_id: int) -> None:
+    def _ensure_member_stub(self, parliament_id: int) -> Person:
         """Create a minimal Person stub if we only have the ID (from a question)."""
         existing = self.db.execute(
             select(Person).where(Person.parliament_id == parliament_id)
         ).scalar_one_or_none()
-        if not existing:
-            self.db.add(
-                Person(
-                    parliament_id=parliament_id,
-                    name_display=f"Member #{parliament_id}",
-                    is_active=True,
-                )
-            )
-            self.db.flush()
+        if existing:
+            return existing
+
+        person = Person(
+            parliament_id=parliament_id,
+            name_display=f"Member #{parliament_id}",
+            is_active=True,
+        )
+        self.db.add(person)
+        self.db.flush()
+        return person
 
     # ── Parliament: Division Votes ─────────────────────────────────────────
 
