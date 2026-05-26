@@ -436,6 +436,12 @@ class TestUpsertQuestion:
         ).scalar_one()
         assert person.name_display == "Member #9999"
 
+        question = db_session.execute(
+            select(WrittenQuestion).where(WrittenQuestion.parliament_question_id == 502)
+        ).scalar_one()
+        assert question.asking_person_id == person.id
+        assert question.asking_member_parliament_id == 9999
+
     def test_links_question_to_topic(self, db_session: Session):
         topic = make_topic(db_session)
         service = IngestService(db_session)

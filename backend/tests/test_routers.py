@@ -548,13 +548,12 @@ async def test_timeline_includes_written_question_details(client, async_session)
     )
     topic_id = create_resp.json()["id"]
 
-    async_session.add(
-        Person(
-            parliament_id=77,
-            name_display="Iqbal Mohamed",
-            is_active=True,
-        )
+    person = Person(
+        parliament_id=77,
+        name_display="Iqbal Mohamed",
+        is_active=True,
     )
+    async_session.add(person)
     await async_session.flush()
 
     question = WrittenQuestion(
@@ -565,7 +564,8 @@ async def test_timeline_includes_written_question_details(client, async_session)
         house="Commons",
         date_tabled=datetime(2026, 3, 10).date(),
         date_answered=datetime(2026, 3, 12).date(),
-        asking_member_id=77,
+        asking_person_id=person.id,
+        asking_member_parliament_id=77,
         answering_body="Foreign, Commonwealth and Development Office",
         answer_text="The Government continues to monitor the situation closely.",
         answer_source_url="https://www.gov.uk/example-answer",

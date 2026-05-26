@@ -147,7 +147,8 @@ class TestGraphProjectionBuilder:
                 house="Commons",
                 date_tabled=date(2026, 3, 10),
                 date_answered=date(2026, 3, 12),
-                asking_member_id=asker.parliament_id,
+                asking_person_id=asker.id,
+                asking_member_parliament_id=asker.parliament_id,
                 answering_body="Foreign, Commonwealth and Development Office",
                 answer_text="The Government continues to monitor the situation closely.",
                 answer_source_url="https://www.gov.uk/example-answer",
@@ -245,7 +246,8 @@ class TestGraphProjectionBuilder:
                 house="Commons",
                 date_tabled=date(2026, 3, 4),
                 date_answered=date(2026, 3, 13),
-                asking_member_id=asker.parliament_id,
+                asking_person_id=asker.id,
+                asking_member_parliament_id=asker.parliament_id,
                 answering_body="Ministry of Defence",
             )
         )
