@@ -292,10 +292,10 @@ class GraphProjectionBuilder:
 
     def _question_properties(self, question: WrittenQuestion) -> dict[str, str | None]:
         asking_member_name = None
-        if question.asking_member_id is not None:
+        if question.asking_person_id is not None:
             asking_member_name = self.db.execute(
                 select(Person.name_display).where(
-                    Person.parliament_id == question.asking_member_id
+                    Person.id == question.asking_person_id
                 )
             ).scalar_one_or_none()
 
@@ -367,11 +367,11 @@ class GraphProjectionBuilder:
     def _create_asked_by_edges(
         self, node_map: dict[tuple[str, int], int]
     ) -> int:
-        """question -> person via asking_member_id."""
+        """question -> person via asking_person_id."""
         questions = (
             self.db.execute(
                 select(WrittenQuestion).where(
-                    WrittenQuestion.asking_member_id.isnot(None)
+                    WrittenQuestion.asking_person_id.isnot(None)
                 )
             )
             .scalars()
@@ -381,9 +381,8 @@ class GraphProjectionBuilder:
         count = 0
         for q in questions:
             src = node_map.get(("question", q.id))
-            # asking_member_id is parliament_id; find the Person's id
             person = self.db.execute(
-                select(Person).where(Person.parliament_id == q.asking_member_id)
+                select(Person).where(Person.id == q.asking_person_id)
             ).scalar_one_or_none()
             if person:
                 tgt = node_map.get(("person", person.id))

@@ -49,7 +49,7 @@ async def _load_question_details(
             WrittenQuestion.answer_source_url,
             Person.name_display.label("asking_member_name"),
         )
-        .outerjoin(Person, Person.parliament_id == WrittenQuestion.asking_member_id)
+        .outerjoin(Person, Person.id == WrittenQuestion.asking_person_id)
         .where(WrittenQuestion.id.in_(question_ids))
     )
     result = await db.execute(stmt)

@@ -161,7 +161,7 @@ async def list_tracked_members(
     )
     question_count_subq = (
         select(func.count(WrittenQuestion.id))
-        .where(WrittenQuestion.asking_member_id == Person.parliament_id)
+        .where(WrittenQuestion.asking_person_id == Person.id)
         .correlate(Person)
         .scalar_subquery()
     )
@@ -310,7 +310,7 @@ async def get_member_detail(
     question_count = (
         await db.execute(
             select(func.count(WrittenQuestion.id)).where(
-                WrittenQuestion.asking_member_id == parliament_id
+                WrittenQuestion.asking_person_id == person.id
             )
         )
     ).scalar() or 0
@@ -398,13 +398,13 @@ async def get_member_questions(
         raise HTTPException(status_code=404, detail="Member not found")
 
     count_stmt = select(func.count(WrittenQuestion.id)).where(
-        WrittenQuestion.asking_member_id == parliament_id
+        WrittenQuestion.asking_person_id == person.id
     )
     total = (await db.execute(count_stmt)).scalar() or 0
 
     questions_stmt = (
         select(WrittenQuestion)
-        .where(WrittenQuestion.asking_member_id == parliament_id)
+        .where(WrittenQuestion.asking_person_id == person.id)
         .order_by(WrittenQuestion.date_tabled.desc().nullslast())
         .limit(limit)
         .offset(offset)
